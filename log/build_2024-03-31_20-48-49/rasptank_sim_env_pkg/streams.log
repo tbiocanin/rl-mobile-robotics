@@ -1,0 +1,33 @@
+[0.474s] Invoking command in '/home/teodor/GitHub/rl-mobile-robotics/src/rasptank_sim_env_pkg': PYTHONPATH=/home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/prefix_override:/home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated setup.py egg_info --egg-base ../../build/rasptank_sim_env_pkg build --build-base /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build install --record /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/install.log --single-version-externally-managed install_data
+[0.635s] running egg_info
+[0.635s] creating ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info
+[0.635s] writing ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/PKG-INFO
+[0.635s] writing dependency_links to ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/dependency_links.txt
+[0.635s] writing entry points to ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/entry_points.txt
+[0.635s] writing requirements to ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/requires.txt
+[0.636s] writing top-level names to ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/top_level.txt
+[0.636s] writing manifest file '../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/SOURCES.txt'
+[0.637s] reading manifest file '../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/SOURCES.txt'
+[0.638s] writing manifest file '../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info/SOURCES.txt'
+[0.638s] running build
+[0.638s] running build_py
+[0.638s] creating /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build
+[0.638s] creating /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build/lib
+[0.638s] creating /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build/lib/rasptank_sim_env_pkg
+[0.638s] copying rasptank_sim_env_pkg/__init__.py -> /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build/lib/rasptank_sim_env_pkg
+[0.638s] running install
+[0.639s] running install_lib
+[0.639s] creating /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages/rasptank_sim_env_pkg
+[0.639s] copying /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build/lib/rasptank_sim_env_pkg/__init__.py -> /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages/rasptank_sim_env_pkg
+[0.640s] byte-compiling /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages/rasptank_sim_env_pkg/__init__.py to __init__.cpython-310.pyc
+[0.640s] running install_data
+[0.640s] creating /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/share/ament_index
+[0.640s] creating /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/share/ament_index/resource_index
+[0.640s] creating /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/share/ament_index/resource_index/packages
+[0.640s] copying resource/rasptank_sim_env_pkg -> /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/share/ament_index/resource_index/packages
+[0.640s] copying package.xml -> /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/share/rasptank_sim_env_pkg
+[0.640s] running install_egg_info
+[0.641s] Copying ../../build/rasptank_sim_env_pkg/rasptank_sim_env_pkg.egg-info to /home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages/rasptank_sim_env_pkg-0.0.0-py3.10.egg-info
+[0.642s] running install_scripts
+[0.655s] writing list of installed files to '/home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/install.log'
+[0.672s] Invoked command in '/home/teodor/GitHub/rl-mobile-robotics/src/rasptank_sim_env_pkg' returned '0': PYTHONPATH=/home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/prefix_override:/home/teodor/GitHub/rl-mobile-robotics/install/rasptank_sim_env_pkg/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated setup.py egg_info --egg-base ../../build/rasptank_sim_env_pkg build --build-base /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/build install --record /home/teodor/GitHub/rl-mobile-robotics/build/rasptank_sim_env_pkg/install.log --single-version-externally-managed install_data
