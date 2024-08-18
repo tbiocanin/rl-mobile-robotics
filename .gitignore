@@ -1,3 +1,5 @@
 .vscode/*
 devel/*
 build/*
+log/*
+src/mock_pkg/*
