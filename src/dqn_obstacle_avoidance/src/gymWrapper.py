@@ -2,7 +2,7 @@
 from gymnasium import spaces
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
@@ -31,94 +31,95 @@ class MobileRobot(gym.Env):
         # hardcoded for now
         self.goal_x = 1.5
         self.goal_y = 1.5
-        self.timer = 0
+        self.timer = rospy.Time()
         self.init_node()
-
+        self.distance = 0.0
         self.reward = 0.0
         self.info = self._get_info()
 
         # gym specific attributes
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 64, 64), dtype=np.uint8)
+        self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 64, 64), dtype=np.float32)
         self.done = False
 
     def step(self, action):
         # update velocity ce biti pozvan ode
         rospy.logdebug("Doing a step")
         self.update_velocity(action)
-        self.timer = rospy.get_time()
-        self.reward = self.compute_reward()
+        self.timer = rospy.get_rostime()
+        self.reward = self._compute_reward()
         self.info = self._get_info()
-        return self.state, self.reward, self.done, self.timer, self.info
+        self.done = self.is_done()
+        return self.state, self.reward, self.done, self.timer.secs, self.info
     
     def update_velocity(self, action):
         rospy.logdebug("Velocity update.")
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.2
+            msg.linear.x = 0.25
             msg.angular.z = 0.0
         elif action == 1:
             msg.linear.x = 0.0
-            msg.angular.z = 0.2
+            msg.angular.z = 0.3
         elif action == 2:
             msg.linear.x = 0.0
-            msg.angular.z = -0.2
+            msg.angular.z = -0.3
 
         self.command_publisher.publish(msg)
 
         return None
 
-    def compute_reward(self):
+    def _compute_reward(self):
         
         if self.done == True:
             self.reward += 10
         else:
-            self.reward -= 0.1
+            self.reward += 0.01
 
         return self.reward
 
 
-    def is_done(self, data: Odometry):
+    def is_done_clbk(self, data: Odometry):
         # check based on the location
-        # TODO: to be more dynamic
-        # self.timer = rospy.get_time()
-
-        # if self.timer > 100:
-        #     self.timer = 0
-        #     self.done = True
-        #     return self.done
         
         rospy.logdebug("Checking if done")
         current_x = data.pose.pose.position.x
         current_y = data.pose.pose.position.y
-        
-        distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
+        self.distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
 
-        if distance < 0.2:
+    def is_done(self):
+        curr_time = rospy.get_rostime()
+        delta_t = curr_time - self.timer
+        
+        if delta_t.to_sec() == 10000:
+            self.timer = 0
+            self.done = True
+            return self.done
+
+        if self.distance < 0.2:
             self.done = True
             return self.done
         else:
+            self.done = False
             return self.done
 
     def reset(self, seed = None, options=None):
-        # actually the init method of the env
-        rospy.loginfo_once("Reseting robot position for the next episode...")
+        super().reset(seed=seed)
+        rospy.loginfo("Reseting robot position for the next episode...")
+        self.initial_state = ModelState()
+        self.initial_state.model_name = 'turtlebot3_waffle'
         set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
-        self.initial_state.pose.position.x = 0
-        self.initial_state.pose.position.y = 0
-        self.initial_state.pose.position.z = 0
-        self.initial_state.pose.orientation.x = 0
-        self.initial_state.pose.orientation.z = 0
-        self.initial_state.pose.orientation.w = 0
-        self.initial_state.twist.linear.x = 0
-        self.initial_state.twist.linear.z = 0
-        self.initial_state.twist.angular.x = 0
-        self.initial_state.twist.angular.z = 0
+        self.initial_state.pose = Pose(
+            position = Point(-2, -0.5, 0),
+            orientation=Quaternion(0, 0, 0, 1)
+        )
         self.initial_state.reference_frame = 'world'
         self.info = self._get_info()
         set_model_state(self.initial_state)
-        return self.state, self.info
+        obs = np.expand_dims(self.state, axis=0)
+        print(np.shape(obs))
+        return obs, self.info
 
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
@@ -142,7 +143,8 @@ class MobileRobot(gym.Env):
     
     def create_localization_sub(self):
         rospy.loginfo_once("Localization node init!")
-        rospy.Subscriber("/odom", Odometry, self.is_done)
+        rospy.Rate(1)
+        rospy.Subscriber("/odom", Odometry, self.is_done_clbk)
 
     def init_node(self):
         self.command_publisher = self.create_control_pub()
@@ -158,17 +160,13 @@ class MobileRobot(gym.Env):
         current_y = data.pose.pose.position.y
         
         distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
-
-
         info = {
             'distance_to_target' : distance,
             'cumulative_reward'  : self.reward
         }
 
+        print(info)
         return info
-
-    def _get_obs(self):
-        pass
 
 if __name__ == "__main__":
     try:
@@ -182,25 +180,24 @@ if __name__ == "__main__":
 
     model = DQN(
         "CnnPolicy",
-        gymWrapper,
-        policy_kwargs = dict(normalize_images=False, net_arch=[64, 64]),
+        env=gymWrapper,
+        policy_kwargs = dict(normalize_images=False, net_arch=[128, 128]),
         learning_rate=5e-4,
         buffer_size=100,
-        learning_starts=10,
-        batch_size=10,
-        gamma=0.99,
-        tensorboard_log="dqn_log/"
-    )
+        learning_starts=100,
+        batch_size=10000,
+        gamma=0.89,
+        tensorboard_log="dqn_log/",
+        )
 
-    model.learn(10, progress_bar=True)
-    gymWrapper.reset()
+    model.learn(1000, progress_bar=True)
     model.save("dqn_log/model")
     for _ in range(100):
         done = False
         observation, info = gymWrapper.reset()
         observation = np.expand_dims(observation, axis=0)
         while not done:
-            action, _states = model.predict(observation)
+            action = model.predict(observation, deterministic=True)
             obs, reward, done, truncted, info = gymWrapper.step(action)
             if done:
                 gymWrapper.reset()
