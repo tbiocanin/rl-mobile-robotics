@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from gymnasium import spaces
 from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
@@ -11,6 +12,7 @@ import gymnasium as gym
 import numpy as np
 from math import sqrt
 from stable_baselines3 import DQN
+import multiprocessing
 """
 Description: Gymnasium wrapper to be used within stable-baselines3
 """
@@ -29,29 +31,30 @@ class MobileRobot(gym.Env):
         # hardcoded for now
         self.goal_x = 1.5
         self.goal_y = 1.5
-
+        self.timer = 0
         self.init_node()
+
+        self.reward = 0.0
+        self.info = self._get_info()
 
         # gym specific attributes
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 64, 64), dtype=np.uint8)
         self.done = False
-        self.reward = 0.0
 
     def step(self, action):
         # update velocity ce biti pozvan ode
         rospy.logdebug("Doing a step")
         self.update_velocity(action)
-
+        self.timer = rospy.get_time()
         self.reward = self.compute_reward()
-
-        return self.state, self.reward, self.done, {}
+        self.info = self._get_info()
+        return self.state, self.reward, self.done, self.timer, self.info
     
     def update_velocity(self, action):
         rospy.logdebug("Velocity update.")
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
-        print(action)
         if action == 0:
             msg.linear.x = 0.2
             msg.angular.z = 0.0
@@ -79,6 +82,13 @@ class MobileRobot(gym.Env):
     def is_done(self, data: Odometry):
         # check based on the location
         # TODO: to be more dynamic
+        # self.timer = rospy.get_time()
+
+        # if self.timer > 100:
+        #     self.timer = 0
+        #     self.done = True
+        #     return self.done
+        
         rospy.logdebug("Checking if done")
         current_x = data.pose.pose.position.x
         current_y = data.pose.pose.position.y
@@ -86,15 +96,17 @@ class MobileRobot(gym.Env):
         distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
 
         if distance < 0.2:
-            return True
+            self.done = True
+            return self.done
         else:
-            return False
+            return self.done
 
     def reset(self, seed = None, options=None):
         # actually the init method of the env
         rospy.loginfo_once("Reseting robot position for the next episode...")
-        self.initial_state.pose.position.x = -2
-        self.initial_state.pose.position.y = -0.5
+        set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        self.initial_state.pose.position.x = 0
+        self.initial_state.pose.position.y = 0
         self.initial_state.pose.position.z = 0
         self.initial_state.pose.orientation.x = 0
         self.initial_state.pose.orientation.z = 0
@@ -103,13 +115,15 @@ class MobileRobot(gym.Env):
         self.initial_state.twist.linear.z = 0
         self.initial_state.twist.angular.x = 0
         self.initial_state.twist.angular.z = 0
-
-        return self.state, {}
+        self.initial_state.reference_frame = 'world'
+        self.info = self._get_info()
+        set_model_state(self.initial_state)
+        return self.state, self.info
 
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
+        rate = rospy.Rate(1)
         self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=10, callback=self.update_state_callback)
-
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -138,40 +152,55 @@ class MobileRobot(gym.Env):
     def run_node(self):
         rospy.spin()
 
+    def _get_info(self):
+        data = Odometry()
+        current_x = data.pose.pose.position.x
+        current_y = data.pose.pose.position.y
+        
+        distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
+
+
+        info = {
+            'distance_to_target' : distance,
+            'cumulative_reward'  : self.reward
+        }
+
+        return info
+
+    def _get_obs(self):
+        pass
+
 if __name__ == "__main__":
-    # train loop init
-    # NOTE neki bag je ovde u inicijalizaciji 
     try:
         gymWrapper = MobileRobot()
-        gymWrapper.run_node()
     except rospy.ROSInterruptException:
-        pass
-    # model = DQN(
-    #     "CnnPolicy",
-    #     gymWrapper,
-    #     policy_kwargs = dict(normalize_images=False, net_arch=[124, 124]),
-    #     learning_rate=5e-4,
-    #     buffer_size=100,
-    #     learning_starts=10,
-    #     batch_size=10,
-    #     gamma=0.99,
-    #     tensorboard_log="dqn_log/"
-    # )
+        rospy.logerr("Nodes not initialized!")
 
-    # model.learn(10, progress_bar=True)
-    # model.save("dqn_log/model")
-    # for _ in range(100):
-    #     done = False
-    #     observation = gymWrapper.reset()
-    #     while not done:
-    #         action = model.predict(observation)
-    #         obs, reward, done, info = gymWrapper.step(action)
+    ros_process = multiprocessing.Process(target=gymWrapper.run_node)
 
-    #         if done:
-    #             gymWrapper.reset()
+    ros_process.start()
 
+    model = DQN(
+        "CnnPolicy",
+        gymWrapper,
+        policy_kwargs = dict(normalize_images=False, net_arch=[64, 64]),
+        learning_rate=5e-4,
+        buffer_size=100,
+        learning_starts=10,
+        batch_size=10,
+        gamma=0.99,
+        tensorboard_log="dqn_log/"
+    )
+
+    model.learn(10, progress_bar=True)
+    gymWrapper.reset()
+    model.save("dqn_log/model")
     for _ in range(100):
-        action = gymWrapper.action_space.sample()
-        obs, reward, done, info = gymWrapper.step(action)
-        if done:
-            obs = gymWrapper.reset()
+        done = False
+        observation, info = gymWrapper.reset()
+        observation = np.expand_dims(observation, axis=0)
+        while not done:
+            action, _states = model.predict(observation)
+            obs, reward, done, truncted, info = gymWrapper.step(action)
+            if done:
+                gymWrapper.reset()
