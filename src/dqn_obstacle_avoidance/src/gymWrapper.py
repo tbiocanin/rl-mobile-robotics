@@ -13,8 +13,10 @@ import numpy as np
 from math import sqrt
 from stable_baselines3 import DQN
 import multiprocessing
+import random
+
 """
-Description: Gymnasium wrapper to be used within stable-baselines3
+Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 """
 class MobileRobot(gym.Env):
 
@@ -44,16 +46,16 @@ class MobileRobot(gym.Env):
         self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 128, 128), dtype=np.float32)
         self.done = False
 
+        self.min_region_values = []
+
     def timer_callback(self, event):
         self.done = True
 
     def step(self, action):
-        # update velocity ce biti pozvan ode
         rospy.logdebug("Doing a step")
         self.update_velocity(action)
         self.reward = self._compute_reward()
         self.info = self._get_info()
-        # self.done = self.is_done()
         return self.state, self.reward, self.done, False, self.info
     
     def update_velocity(self, action):
@@ -76,10 +78,13 @@ class MobileRobot(gym.Env):
 
     def _compute_reward(self):
         
-        if self.done == True:
-            self.reward += 10
-        else:
-            self.reward -= 0.01
+        self.reward = 0.1
+
+        # TODO: reward hadnling with the ROI being bellow the treshhold
+        print(np.min(self.state))
+        if np.min(self.state) < 0.4:
+            print("ADDING NEGATIVE REWARD FOR DISTANCE")
+            self.reward -= 2
 
         return self.reward
 
@@ -95,12 +100,17 @@ class MobileRobot(gym.Env):
     def reset(self, seed = None, options=None):
         super().reset(seed=seed)
         rospy.loginfo("Reseting robot position for the next episode...")
+
+        # generating random positions for next episodes
+        rand_x_position = random.randint(-2, 2)
+        rand_y_position = random.uniform(-0.2, -0.7)
+
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
         set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
         self.initial_state.pose = Pose(
-            position = Point(-2, -0.5, 0),
+            position = Point(rand_x_position, rand_y_position, 0),
             orientation=Quaternion(0, 0, 0, 1)
         )
 
@@ -122,8 +132,16 @@ class MobileRobot(gym.Env):
 
         rospy.logdebug("Next state received.")
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
-        self.state = cv2.resize(cv_image, (128, 128))
 
+        # TODO: pre-process the image and send the discrete min version of the image to self.state
+        # (1080, 1920) -> original image shape
+
+        resized_image = cv2.resize(cv_image, (1024, 1024))
+        self.state = self._get_region_minimum(resized_image, 8)
+        if np.min(self.state)< 0.4:
+            print("TOO CLOSE")
+            self.done = True
+            
         return None
 
     def create_control_pub(self):
@@ -143,7 +161,6 @@ class MobileRobot(gym.Env):
         self.create_localization_sub()
 
     def run_node(self):
-        self.time = rospy.get_time()
         rospy.spin()
 
     def _get_info(self):
@@ -158,6 +175,23 @@ class MobileRobot(gym.Env):
         }
 
         return info
+
+    def _get_region_minimum(self, input_image, block_size):
+        
+        region_mins = np.zeros((input_image.shape[0] // block_size, input_image.shape[1] // block_size), dtype=np.float32)
+
+        for y in range(0, input_image.shape[0], block_size):
+            for x in range(0, input_image.shape[1], block_size):
+                
+                current_block = input_image[y:y+block_size, x:x+block_size]
+                min_val = np.min(current_block)
+                if np.isnan(min_val):
+                    min_val = float('inf')
+                region_mins[y // block_size, x // block_size] = min_val
+
+        # self.min_region_values = region_mins
+        # resized_image = cv2.resize(region_mins, (input_image.shape[1], input_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+        return region_mins
 
 if __name__ == "__main__":
     try:
