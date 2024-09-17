@@ -14,7 +14,7 @@ from math import sqrt
 from stable_baselines3 import DQN
 import multiprocessing
 import random
-
+np.set_printoptions(threshold=np.inf)
 """
 Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 """
@@ -78,13 +78,16 @@ class MobileRobot(gym.Env):
 
     def _compute_reward(self):
         
-        self.reward = 0.1
+        # movement reward
+        self.reward -= 0.1
 
         # TODO: reward hadnling with the ROI being bellow the treshhold
-        print(np.min(self.state))
-        if np.min(self.state) < 0.4:
+        if np.min(self.state) < 0.45:
             print("ADDING NEGATIVE REWARD FOR DISTANCE")
             self.reward -= 2
+        else:
+            # debug validation
+            self.reward += 0.2
 
         return self.reward
 
@@ -119,6 +122,7 @@ class MobileRobot(gym.Env):
         set_model_state(self.initial_state)
         obs = np.expand_dims(self.state, axis=0)
         self.done = False
+        self.reward = 0
 
         return obs, self.info
 
@@ -138,9 +142,10 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 8)
-        if np.min(self.state)< 0.4:
-            print("TOO CLOSE")
+        if np.min(self.state) < 0.4009 and np.min(self.state) > 0.4001:
+            print("RESET")
             self.done = True
+            self.reset()
             
         return None
 
@@ -188,9 +193,10 @@ class MobileRobot(gym.Env):
                 if np.isnan(min_val):
                     min_val = float('inf')
                 region_mins[y // block_size, x // block_size] = min_val
-
-        # self.min_region_values = region_mins
-        # resized_image = cv2.resize(region_mins, (input_image.shape[1], input_image.shape[0]), interpolation=cv2.INTER_NEAREST)
+        
+        np.savetxt('array_full.txt', region_mins, fmt='%f') 
+        cv2.imshow("Resize", region_mins)
+        cv2.waitKey(1)
         return region_mins
 
 if __name__ == "__main__":
@@ -228,7 +234,3 @@ if __name__ == "__main__":
             obs, reward, done, truncted, info = gymWrapper.step(action)
             if done:
                 gymWrapper.reset()
-
-# NOTE : obs je ok da bude isto sto i stanje
-# NOTE : treba videti kako cemo prosledjivati sliku, napraviti da bude odnos isti
-# NOTE : diskretizacija; podeliti sliku u grid i za svaki od tih polja u gridu uzmi najmanju distancu (jer je to najrizicnije) i da to bude stanje
