@@ -37,7 +37,7 @@ class MobileRobot(gym.Env):
         self.log_level = 0
 
         # hardcoded for now
-        self.timer = rospy.Timer(rospy.Duration(10), self.timer_callback)
+        self.timer = rospy.Timer(rospy.Duration(30), self.timer_callback)
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
@@ -47,6 +47,8 @@ class MobileRobot(gym.Env):
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 128, 128), dtype=np.float32)
         self.done = False
+
+        self.crashed = False
 
         self.min_region_values = []
 
@@ -83,18 +85,16 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-        self.reward -= 0.1
 
         # TODO: reward hadnling with the ROI being bellow the treshhold
-        if np.min(self.state) < 0.45:
-            # print("ADDING NEGATIVE REWARD FOR DISTANCE")
-            self.reward -= 2
+        if self.crashed:
+            rospy.logwarn("Crash detected, asigning negative reward")
+            self.reward -= 5
         else:
             # debug validation
             self.reward += 0.2
 
         return self.reward
-
 
     def is_done_clbk(self, data: Odometry):
         # check based on the location
@@ -127,6 +127,7 @@ class MobileRobot(gym.Env):
         set_model_state(self.initial_state)
         obs = np.expand_dims(self.state, axis=0)
         self.done = False
+        self.crashed = False
         self.reward = 0
 
         return obs, self.info
@@ -147,9 +148,11 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 8)
+
         if np.min(self.state) < 0.4009 and np.min(self.state) > 0.4001:
             rospy.logwarn("Reseting robot position, episode is finished.")
             self.done = True
+            self.crashed = True
             self.reset()
             
         return None
