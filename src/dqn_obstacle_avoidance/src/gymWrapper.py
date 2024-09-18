@@ -10,17 +10,19 @@ import cv2
 import rospy
 import gymnasium as gym
 import numpy as np
-from math import sqrt
 from stable_baselines3 import DQN
 import multiprocessing
 import random
+import tf
+import tf.transformations
+
 np.set_printoptions(threshold=np.inf)
+
 """
 Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 """
-class MobileRobot(gym.Env):
 
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+class MobileRobot(gym.Env):
 
     def __init__(self) -> None:
         super(MobileRobot, self).__init__()
@@ -32,9 +34,9 @@ class MobileRobot(gym.Env):
         self.command_publisher = None
         self.image_subscriber = None
         self.state = None
+        self.log_level = 0
+
         # hardcoded for now
-        self.goal_x = 1.5
-        self.goal_y = 1.5
         self.timer = rospy.Timer(rospy.Duration(10), self.timer_callback)
         self.init_node()
         self.distance = 0.0
@@ -52,14 +54,16 @@ class MobileRobot(gym.Env):
         self.done = True
 
     def step(self, action):
-        rospy.logdebug("Doing a step")
+        if self.log_level == 1:
+            rospy.loginfo("Doing a step")
         self.update_velocity(action)
         self.reward = self._compute_reward()
         self.info = self._get_info()
         return self.state, self.reward, self.done, False, self.info
     
     def update_velocity(self, action):
-        rospy.logdebug("Velocity update.")
+        if self.log_level == 1:
+            rospy.loginfo("Velocity update.")
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
@@ -83,7 +87,7 @@ class MobileRobot(gym.Env):
 
         # TODO: reward hadnling with the ROI being bellow the treshhold
         if np.min(self.state) < 0.45:
-            print("ADDING NEGATIVE REWARD FOR DISTANCE")
+            # print("ADDING NEGATIVE REWARD FOR DISTANCE")
             self.reward -= 2
         else:
             # debug validation
@@ -95,10 +99,9 @@ class MobileRobot(gym.Env):
     def is_done_clbk(self, data: Odometry):
         # check based on the location
         
-        rospy.logdebug("Checking if done")
-        current_x = data.pose.pose.position.x
-        current_y = data.pose.pose.position.y
-        self.distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
+        if self.log_level == 1:
+            rospy.logdebug("Checking if done")
+        return None
 
     def reset(self, seed = None, options=None):
         super().reset(seed=seed)
@@ -106,15 +109,17 @@ class MobileRobot(gym.Env):
 
         # generating random positions for next episodes
         rand_x_position = random.randint(-2, 2)
-        rand_y_position = random.uniform(-0.2, -0.7)
+        rand_y_position = random.uniform(-0.25, -0.65)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
         set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
+        orientation = self._generate_random_orientation()
+
         self.initial_state.pose = Pose(
             position = Point(rand_x_position, rand_y_position, 0),
-            orientation=Quaternion(0, 0, 0, 1)
+            orientation=Quaternion(orientation[0], orientation[1], orientation[2], orientation[3])
         )
 
         self.initial_state.reference_frame = 'world'
@@ -134,16 +139,16 @@ class MobileRobot(gym.Env):
 
     def update_state_callback(self, msg: Image) -> None:
 
-        rospy.logdebug("Next state received.")
+        if self.log_level == 1:
+            rospy.loginfo("Next state received.")
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
 
-        # TODO: pre-process the image and send the discrete min version of the image to self.state
         # (1080, 1920) -> original image shape
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 8)
         if np.min(self.state) < 0.4009 and np.min(self.state) > 0.4001:
-            print("RESET")
+            rospy.logwarn("Reseting robot position, episode is finished.")
             self.done = True
             self.reset()
             
@@ -169,13 +174,8 @@ class MobileRobot(gym.Env):
         rospy.spin()
 
     def _get_info(self):
-        data = Odometry()
-        current_x = data.pose.pose.position.x
-        current_y = data.pose.pose.position.y
         
-        distance = sqrt((self.goal_x - current_x) ** 2 + (self.goal_y - current_y) ** 2)
         info = {
-            'distance_to_target' : distance,
             'cumulative_reward'  : self.reward
         }
 
@@ -194,10 +194,23 @@ class MobileRobot(gym.Env):
                     min_val = float('inf')
                 region_mins[y // block_size, x // block_size] = min_val
         
-        np.savetxt('array_full.txt', region_mins, fmt='%f') 
-        cv2.imshow("Resize", region_mins)
-        cv2.waitKey(1)
+        # NOTE: Uncomment this block for debug purposes
+        # np.savetxt('array_full.txt', region_mins, fmt='%f') # shows the pixel values positioned like on the image 
+        # cv2.imshow("Resize", region_mins) # shows the new minimized pixel value image 
+        # cv2.waitKey(1) 
+
         return region_mins
+    
+    def _generate_random_orientation(self):
+        """
+        Generating parameters for random position and orientation
+        """
+
+        # TODO: 
+        rand_yaw = random.uniform(0, 2*np.pi)
+        new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
+
+        return new_quaternion
 
 if __name__ == "__main__":
     try:
@@ -212,18 +225,22 @@ if __name__ == "__main__":
     model = DQN(
         "CnnPolicy",
         env=gymWrapper,
-        policy_kwargs = dict(normalize_images=False, net_arch=[128, 128]),
+        policy_kwargs = dict(normalize_images=False, net_arch=[128, 128, 128]),
         learning_rate=5e-4,
-        buffer_size=100,
-        learning_starts=10,
+        exploration_initial_eps=1,
+        exploration_final_eps=0.1,
+        buffer_size=1000,
+        learning_starts=100,
         batch_size=64,
-        gamma=0.99,
+        gamma=0.79,
         tensorboard_log="dqn_log/",
-        device='cpu'
+        device='cuda'
     )
 
     model.learn(1e3, progress_bar=True)
     model.save("dqn_log/model")
+
+    # model.load("dqn_log/model")
     for _ in range(100):
         done = False
         observation, info = gymWrapper.reset()
@@ -231,6 +248,6 @@ if __name__ == "__main__":
         observation = np.expand_dims(observation, axis=0)
         while not done:
             action = model.predict(observation, deterministic=True)
-            obs, reward, done, truncted, info = gymWrapper.step(action)
+            obs, reward, done, truncted, info = gymWrapper.step(action[0][0])
             if done:
                 gymWrapper.reset()
