@@ -29,6 +29,7 @@ def save_image_values_to_txt(data):
 def print_depth_data_callback(msg: Image):
     rospy.loginfo("Received an image!")
     cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
+    print(cv_image.shape)
     save_image_values_to_txt(cv_image)
 
 if __name__ == "__main__":
