@@ -44,8 +44,8 @@ class MobileRobot(gym.Env):
         self.info = self._get_info()
 
         # gym specific attributes
-        self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 128, 128), dtype=np.float32)
+        self.action_space = spaces.Discrete(4)
+        self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 256, 256), dtype=np.float32)
         self.done = False
 
         self.crashed = False
@@ -72,6 +72,10 @@ class MobileRobot(gym.Env):
             msg.linear.x = 0.25
             msg.angular.z = 0.0
         elif action == 1:
+            msg.linear.x = -0.25
+            msg.angular.z = 0.0
+            self.reward -= 0.4
+        elif action == 1:
             msg.linear.x = 0.0
             msg.angular.z = 0.3
         elif action == 2:
@@ -89,7 +93,9 @@ class MobileRobot(gym.Env):
         # TODO: reward hadnling with the ROI being bellow the treshhold
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 5
+            self.reward -= 2
+        elif np.min(self.state) == float('inf'):
+            self.reward -= 2
         else:
             # debug validation
             self.reward += 0.2
@@ -108,8 +114,8 @@ class MobileRobot(gym.Env):
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.randint(-2, 2)
-        rand_y_position = random.uniform(-0.25, -0.65)
+        rand_x_position = random.uniform(-1.7, -2.2)
+        rand_y_position = random.uniform(-1, 1)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
@@ -147,9 +153,9 @@ class MobileRobot(gym.Env):
         # (1080, 1920) -> original image shape
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
-        self.state = self._get_region_minimum(resized_image, 8)
+        self.state = self._get_region_minimum(resized_image, 4)
 
-        if np.min(self.state) < 0.4009 and np.min(self.state) > 0.4001:
+        if np.min(self.state) < 0.4005 and np.min(self.state) > 0.40009:
             rospy.logwarn("Reseting robot position, episode is finished.")
             self.done = True
             self.crashed = True
@@ -228,22 +234,22 @@ if __name__ == "__main__":
     model = DQN(
         "CnnPolicy",
         env=gymWrapper,
-        policy_kwargs = dict(normalize_images=False, net_arch=[128, 128, 128]),
+        policy_kwargs = dict(normalize_images=False, net_arch=[256, 256]),
         learning_rate=5e-4,
         exploration_initial_eps=1,
-        exploration_final_eps=0.1,
-        buffer_size=1000,
-        learning_starts=100,
+        exploration_final_eps=0.6,
+        buffer_size=100,
+        learning_starts=200,
         batch_size=64,
-        gamma=0.79,
+        gamma=0.99,
         tensorboard_log="dqn_log/",
-        device='cuda'
+        device='cpu'
     )
 
-    model.learn(1e3, progress_bar=True)
+    model.learn(1e3, progress_bar=True, log_interval=10)
     model.save("dqn_log/model")
 
-    # model.load("dqn_log/model")
+    model.load("dqn_log/model")
     for _ in range(100):
         done = False
         observation, info = gymWrapper.reset()
