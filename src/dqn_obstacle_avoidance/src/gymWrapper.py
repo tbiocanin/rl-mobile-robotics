@@ -15,9 +15,7 @@ import multiprocessing
 import random
 import tf
 import tf.transformations
-
-np.set_printoptions(threshold=np.inf)
-
+from typing import Tuple, Dict, Any
 """
 Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 """
@@ -109,7 +107,7 @@ class MobileRobot(gym.Env):
             rospy.logdebug("Checking if done")
         return None
 
-    def reset(self, seed = None, options=None):
+    def reset(self, seed = None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
         rospy.loginfo("Reseting robot position for the next episode...")
 
@@ -131,7 +129,7 @@ class MobileRobot(gym.Env):
         self.initial_state.reference_frame = 'world'
         self.info = self._get_info()
         set_model_state(self.initial_state)
-        obs = np.expand_dims(self.state, axis=0)
+        obs = self.state
         self.done = False
         self.crashed = False
         self.reward = 0
@@ -155,12 +153,13 @@ class MobileRobot(gym.Env):
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 4)
 
-        if np.min(self.state) < 0.4005 and np.min(self.state) > 0.40009:
+        if np.min(self.state) > 0.002 and np.min(self.state) < 0.3:
             rospy.logwarn("Reseting robot position, episode is finished.")
             self.done = True
             self.crashed = True
             self.reset()
-            
+
+        self.state = np.expand_dims(self.state, axis=0)
         return None
 
     def create_control_pub(self):
@@ -201,7 +200,7 @@ class MobileRobot(gym.Env):
                 min_val = np.min(current_block)
                 if np.isnan(min_val):
                     min_val = float('inf')
-                region_mins[y // block_size, x // block_size] = min_val
+                region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
         
         # NOTE: Uncomment this block for debug purposes
         # np.savetxt('array_full.txt', region_mins, fmt='%f') # shows the pixel values positioned like on the image 
@@ -210,53 +209,19 @@ class MobileRobot(gym.Env):
 
         return region_mins
     
+    def _scale_values(self, value: float) -> float:
+        return ((value - 0.4)/(4 - 0.4) * 255)
+    
     def _generate_random_orientation(self):
         """
         Generating parameters for random position and orientation
         """
 
         # TODO: 
-        rand_yaw = random.uniform(0, 2*np.pi)
+        rand_yaw = random.uniform(0, np.pi)
         new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
 
         return new_quaternion
 
 if __name__ == "__main__":
-    try:
-        gymWrapper = MobileRobot()
-    except rospy.ROSInterruptException:
-        rospy.logerr("Nodes not initialized!")
-
-    ros_process = multiprocessing.Process(target=gymWrapper.run_node)
-
-    ros_process.start()
-
-    model = DQN(
-        "CnnPolicy",
-        env=gymWrapper,
-        policy_kwargs = dict(normalize_images=False, net_arch=[256, 256]),
-        learning_rate=5e-4,
-        exploration_initial_eps=1,
-        exploration_final_eps=0.6,
-        buffer_size=100,
-        learning_starts=200,
-        batch_size=64,
-        gamma=0.99,
-        tensorboard_log="dqn_log/",
-        device='cpu'
-    )
-
-    model.learn(1e3, progress_bar=True, log_interval=10)
-    model.save("dqn_log/model")
-
-    model.load("dqn_log/model")
-    for _ in range(100):
-        done = False
-        observation, info = gymWrapper.reset()
-        gymWrapper.timer = rospy.get_rostime()
-        observation = np.expand_dims(observation, axis=0)
-        while not done:
-            action = model.predict(observation, deterministic=True)
-            obs, reward, done, truncted, info = gymWrapper.step(action[0][0])
-            if done:
-                gymWrapper.reset()
+    pass
