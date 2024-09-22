@@ -35,14 +35,14 @@ class MobileRobot(gym.Env):
         self.log_level = 0
 
         # hardcoded for now
-        self.timer = rospy.Timer(rospy.Duration(30), self.timer_callback)
+        self.timer = rospy.Timer(rospy.Duration(20), self.timer_callback)
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
         self.info = self._get_info()
 
         # gym specific attributes
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 256, 256), dtype=np.float32)
         self.done = False
 
@@ -69,10 +69,10 @@ class MobileRobot(gym.Env):
         if action == 0:
             msg.linear.x = 0.25
             msg.angular.z = 0.0
-        elif action == 1:
-            msg.linear.x = -0.25
-            msg.angular.z = 0.0
-            self.reward -= 0.4
+        # elif action == 1:
+        #     msg.linear.x = -0.25
+        #     msg.angular.z = 0.0
+        #     self.reward -= 0.7
         elif action == 1:
             msg.linear.x = 0.0
             msg.angular.z = 0.3
@@ -92,11 +92,9 @@ class MobileRobot(gym.Env):
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
             self.reward -= 2
-        elif np.min(self.state) == float('inf'):
-            self.reward -= 2
         else:
             # debug validation
-            self.reward += 0.2
+            self.reward += 0.5
 
         return self.reward
 
@@ -138,8 +136,8 @@ class MobileRobot(gym.Env):
 
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
-        rate = rospy.Rate(1)
-        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=10, callback=self.update_state_callback)
+        rate = rospy.Rate(100)
+        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=1, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -152,11 +150,12 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 4)
-
-        if np.min(self.state) > 0.002 and np.min(self.state) < 0.3:
-            rospy.logwarn("Reseting robot position, episode is finished.")
+        print(np.min(self.state))
+        if (np.min(self.state) > 0.001 and np.min(self.state) < 0.1) or (np.min(self.state) == 325.83334):
+            rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.done = True
             self.crashed = True
+            self.reward = self._compute_reward()
             self.reset()
 
         self.state = np.expand_dims(self.state, axis=0)
@@ -192,14 +191,15 @@ class MobileRobot(gym.Env):
     def _get_region_minimum(self, input_image, block_size):
         
         region_mins = np.zeros((input_image.shape[0] // block_size, input_image.shape[1] // block_size), dtype=np.float32)
-
+        # input_image = ~np.isnan(input_image)
         for y in range(0, input_image.shape[0], block_size):
             for x in range(0, input_image.shape[1], block_size):
                 
                 current_block = input_image[y:y+block_size, x:x+block_size]
                 min_val = np.min(current_block)
                 if np.isnan(min_val):
-                    min_val = float('inf')
+                    min_val = 5
+
                 region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
         
         # NOTE: Uncomment this block for debug purposes
@@ -216,8 +216,6 @@ class MobileRobot(gym.Env):
         """
         Generating parameters for random position and orientation
         """
-
-        # TODO: 
         rand_yaw = random.uniform(0, np.pi)
         new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
 

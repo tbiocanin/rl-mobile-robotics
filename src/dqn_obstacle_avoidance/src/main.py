@@ -40,12 +40,12 @@ if __name__ == "__main__":
         batch_size=64,
         gamma=0.99,
         tensorboard_log="dqn_log/",
-        device='cpu'
+        device='cuda'
     )
 
-    model.learn(1e3, progress_bar=True, log_interval=10)
+    model.learn(3e4, progress_bar=True, log_interval=1)
     model.save("dqn_log/model")
-    model.load("dqn_log/model")
+    # model.load("dqn_log/model")
     
     for _ in range(100):
         done = False
