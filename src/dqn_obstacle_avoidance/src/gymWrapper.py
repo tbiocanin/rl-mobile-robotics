@@ -51,6 +51,8 @@ class MobileRobot(gym.Env):
         self.min_region_values = []
 
     def timer_callback(self, event):
+        rospy.loginfo("Did not crash untill the end of the episode!")
+        self.reward += 100
         self.done = True
 
     def step(self, action):
@@ -67,7 +69,7 @@ class MobileRobot(gym.Env):
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.25
+            msg.linear.x = 0.45
             msg.angular.z = 0.0
         # elif action == 1:
         #     msg.linear.x = -0.25
@@ -87,13 +89,11 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-
         # TODO: reward hadnling with the ROI being bellow the treshhold
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
             self.reward -= 2
         else:
-            # debug validation
             self.reward += 0.5
 
         return self.reward
@@ -110,8 +110,8 @@ class MobileRobot(gym.Env):
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.uniform(-1.7, -2.2)
-        rand_y_position = random.uniform(-1, 1)
+        rand_x_position = random.uniform(-3, -3)
+        rand_y_position = random.uniform(-2, 2)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
@@ -137,7 +137,7 @@ class MobileRobot(gym.Env):
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
         rate = rospy.Rate(100)
-        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=1, callback=self.update_state_callback)
+        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=5, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -150,8 +150,7 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 4)
-        print(np.min(self.state))
-        if (np.min(self.state) > 0.001 and np.min(self.state) < 0.1) or (np.min(self.state) == 325.83334):
+        if (np.min(self.state) > 0.0047 and np.min(self.state) < 0.008) or (np.min(self.state) == 325.83334):
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.done = True
             self.crashed = True

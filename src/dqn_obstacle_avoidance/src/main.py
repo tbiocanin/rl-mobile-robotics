@@ -34,18 +34,19 @@ if __name__ == "__main__":
         policy_kwargs = policy_kwargs_custom,
         learning_rate=5e-4,
         exploration_initial_eps=1,
-        exploration_final_eps=0.6,
-        buffer_size=100,
-        learning_starts=200,
+        exploration_final_eps=0.85,
+        buffer_size=1000,
+        learning_starts=100,
         batch_size=64,
-        gamma=0.99,
+        gamma=0.9,
         tensorboard_log="dqn_log/",
         device='cuda'
     )
-
-    model.learn(3e4, progress_bar=True, log_interval=1)
-    model.save("dqn_log/model")
-    # model.load("dqn_log/model")
+    # learning starts at 10000
+    # 5e4
+    model.learn(1e4, progress_bar=True, log_interval=1)
+    # model.save("dqn_log/model2")
+    model.load("dqn_log/model2")
     
     for _ in range(100):
         done = False
