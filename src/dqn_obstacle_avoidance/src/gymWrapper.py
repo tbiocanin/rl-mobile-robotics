@@ -35,7 +35,7 @@ class MobileRobot(gym.Env):
         self.log_level = 0
 
         # hardcoded for now
-        self.timer = rospy.Timer(rospy.Duration(20), self.timer_callback)
+        self.timer = rospy.Timer(rospy.Duration(25), self.timer_callback)
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
@@ -52,7 +52,7 @@ class MobileRobot(gym.Env):
 
     def timer_callback(self, event):
         rospy.loginfo("Did not crash untill the end of the episode!")
-        self.reward += 100
+        self.reward += 10
         self.done = True
 
     def step(self, action):
@@ -69,7 +69,7 @@ class MobileRobot(gym.Env):
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.45
+            msg.linear.x = 0.2
             msg.angular.z = 0.0
         # elif action == 1:
         #     msg.linear.x = -0.25
@@ -90,11 +90,15 @@ class MobileRobot(gym.Env):
         
         # movement reward
         # TODO: reward hadnling with the ROI being bellow the treshhold
+        self.reward += 1
+
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 2
-        else:
-            self.reward += 0.5
+            self.reward -= 10
+        # else:
+
+        if self.done and not self.crashed:
+            self.reward += 10
 
         return self.reward
 
@@ -110,8 +114,8 @@ class MobileRobot(gym.Env):
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.uniform(-3, -3)
-        rand_y_position = random.uniform(-2, 2)
+        rand_x_position = random.uniform(2, -4)
+        rand_y_position = random.uniform(-4, 4)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
@@ -150,12 +154,14 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 4)
-        if (np.min(self.state) > 0.0047 and np.min(self.state) < 0.008) or (np.min(self.state) == 325.83334):
+        if (np.min(self.state) > 0.0035 and np.min(self.state) < 0.0085):
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.done = True
             self.crashed = True
             self.reward = self._compute_reward()
             self.reset()
+        elif (np.min(self.state) > 0.01 and np.min(self.state) < 0.1):
+            self.reward -= 1
 
         self.state = np.expand_dims(self.state, axis=0)
         return None
@@ -215,7 +221,7 @@ class MobileRobot(gym.Env):
         """
         Generating parameters for random position and orientation
         """
-        rand_yaw = random.uniform(0, np.pi)
+        rand_yaw = random.uniform(0, 2*np.pi)
         new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
 
         return new_quaternion
