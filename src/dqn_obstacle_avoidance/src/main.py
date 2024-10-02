@@ -32,12 +32,12 @@ if __name__ == "__main__":
         "CnnPolicy",
         env=gymWrapper,
         policy_kwargs = policy_kwargs_custom,
-        learning_rate=5e-4,
+        learning_rate=3e-3,
         exploration_initial_eps=1,
-        exploration_final_eps=0.85,
-        buffer_size=50000,
-        learning_starts=100,
-        batch_size=64,
+        exploration_final_eps=0.8,
+        buffer_size=5000,
+        learning_starts=1000,
+        batch_size=128,
         gamma=0.9,
         tensorboard_log="dqn_log/",
         device='cuda',
@@ -46,10 +46,10 @@ if __name__ == "__main__":
     )
     # learning starts at 10000
     # 5e4
-    model.learn(1e4, progress_bar=True, log_interval=1)
-    model.save("dqn_log/model2")
-    model.load("dqn_log/model2")
-    
+    model.learn(2e4, progress_bar=True, log_interval=1)
+    model.save("dqn_log/model4")
+    model.load("dqn_log/model4")
+    gymWrapper.reset()
     for _ in range(100):
         done = truncted = False
         observation, info = gymWrapper.reset()

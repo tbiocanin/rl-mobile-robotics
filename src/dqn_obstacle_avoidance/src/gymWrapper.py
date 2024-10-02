@@ -4,7 +4,7 @@ from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import rospy
@@ -31,11 +31,12 @@ class MobileRobot(gym.Env):
         self.bridge = CvBridge()
         self.command_publisher = None
         self.image_subscriber = None
+        self.scan_subscriber = None
         self.state = None
         self.log_level = 0
 
         # hardcoded for now
-        self.timer = rospy.Timer(rospy.Duration(25), self.timer_callback)
+        self.timer = rospy.Timer(rospy.Duration(30), self.timer_callback)
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
@@ -52,7 +53,6 @@ class MobileRobot(gym.Env):
 
     def timer_callback(self, event):
         rospy.loginfo("Did not crash untill the end of the episode!")
-        self.reward += 10
         self.done = True
 
     def step(self, action):
@@ -71,16 +71,14 @@ class MobileRobot(gym.Env):
         if action == 0:
             msg.linear.x = 0.2
             msg.angular.z = 0.0
-        # elif action == 1:
-        #     msg.linear.x = -0.25
-        #     msg.angular.z = 0.0
-        #     self.reward -= 0.7
         elif action == 1:
             msg.linear.x = 0.0
-            msg.angular.z = 0.3
+            msg.angular.z = 0.25
+            self.reward -= 2
         elif action == 2:
             msg.linear.x = 0.0
-            msg.angular.z = -0.3
+            msg.angular.z = -0.25
+            self.reward -= 2
 
         self.command_publisher.publish(msg)
 
@@ -94,11 +92,10 @@ class MobileRobot(gym.Env):
 
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 10
-        # else:
+            self.reward -= 300
 
         if self.done and not self.crashed:
-            self.reward += 10
+            self.reward += 200
 
         return self.reward
 
@@ -114,8 +111,8 @@ class MobileRobot(gym.Env):
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.uniform(2, -4)
-        rand_y_position = random.uniform(-4, 4)
+        rand_x_position = random.uniform(2, -1)
+        rand_y_position = random.uniform(-1, 1)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
@@ -141,7 +138,7 @@ class MobileRobot(gym.Env):
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
         rate = rospy.Rate(100)
-        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=5, callback=self.update_state_callback)
+        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=10, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -154,14 +151,6 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (1024, 1024))
         self.state = self._get_region_minimum(resized_image, 4)
-        if (np.min(self.state) > 0.0035 and np.min(self.state) < 0.0085):
-            rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
-            self.done = True
-            self.crashed = True
-            self.reward = self._compute_reward()
-            self.reset()
-        elif (np.min(self.state) > 0.01 and np.min(self.state) < 0.1):
-            self.reward -= 1
 
         self.state = np.expand_dims(self.state, axis=0)
         return None
@@ -171,17 +160,33 @@ class MobileRobot(gym.Env):
         self.command_publisher = rospy.Publisher(name="cmd_vel", data_class=Twist, queue_size=10)
 
         return self.command_publisher
-    
-    def create_localization_sub(self):
-        rospy.loginfo_once("Localization node init!")
-        rospy.Rate(1)
-        rospy.Subscriber("/odom", Odometry, self.is_done_clbk)
 
+    def scan_front_face(self, scan_data):
+
+        front_range = scan_data.ranges[30:120]
+        min_distance = min(front_range)
+
+        if min_distance < .3:
+            rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
+            self.done = True
+            self.crashed = True
+            self.reward = self._compute_reward()
+            self.reset()
+        elif min_distance > .31 and min_distance < .5:
+            self.reward -= 50
+
+    def create_scan_node(self):
+        rospy.loginfo("Creating Lidar node...")
+        rate = rospy.Rate(100)
+        scan_node_sub = rospy.Subscriber(name='/scan', data_class=LaserScan, queue_size=10, callback=self.scan_front_face)
+
+        return scan_node_sub
+    
     def init_node(self):
         self.command_publisher = self.create_control_pub()
         self.image_subscriber = self.create_depth_image_sub()
-        self.create_localization_sub()
-
+        self.scan_subscriber = self.create_scan_node()
+    
     def run_node(self):
         rospy.spin()
 
@@ -196,7 +201,6 @@ class MobileRobot(gym.Env):
     def _get_region_minimum(self, input_image, block_size):
         
         region_mins = np.zeros((input_image.shape[0] // block_size, input_image.shape[1] // block_size), dtype=np.float32)
-        # input_image = ~np.isnan(input_image)
         for y in range(0, input_image.shape[0], block_size):
             for x in range(0, input_image.shape[1], block_size):
                 
