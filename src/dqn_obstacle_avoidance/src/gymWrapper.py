@@ -88,14 +88,14 @@ class MobileRobot(gym.Env):
         
         # movement reward
         # TODO: reward hadnling with the ROI being bellow the treshhold
-        self.reward += 1
+        self.reward += 0.01
 
         if self.crashed:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 300
+            self.reward -= 3
 
         if self.done and not self.crashed:
-            self.reward += 200
+            self.reward += 2
 
         return self.reward
 
@@ -163,7 +163,7 @@ class MobileRobot(gym.Env):
 
     def scan_front_face(self, scan_data):
 
-        front_range = scan_data.ranges[30:120]
+        front_range = scan_data.ranges[45:135]
         min_distance = min(front_range)
 
         if min_distance < .3:
@@ -173,7 +173,7 @@ class MobileRobot(gym.Env):
             self.reward = self._compute_reward()
             self.reset()
         elif min_distance > .31 and min_distance < .5:
-            self.reward -= 50
+            self.reward -= 0.5
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
