@@ -11,7 +11,7 @@ class MobileRobotCNN(BaseFeaturesExtractor):
 
     """
     __init__(self, observation_space, features_dim)
-        observation_space -> self explananotary, the observation space of an agent during training and eval
+        observation_space -> the observation space of an agent during training and eval
         features_dim -> dimensions of the features, default value of 256
     """
     def __init__(self, observation_space, features_dim=256):

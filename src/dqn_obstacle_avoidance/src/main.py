@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from gymWrapper import MobileRobot
+from gym.wrappers.time_limit import TimeLimit
 from stable_baselines3 import DQN
 import multiprocessing
 import rospy
@@ -32,24 +33,26 @@ if __name__ == "__main__":
         "CnnPolicy",
         env=gymWrapper,
         policy_kwargs = policy_kwargs_custom,
-        learning_rate=5e-4,
+        learning_rate=1e-4,
         exploration_initial_eps=1,
-        exploration_final_eps=0.96,
-        buffer_size=2500,
-        learning_starts=5000,
-        batch_size=128,
-        gamma=0.9,
+        exploration_final_eps=0.01,
+        exploration_fraction=0.6,
+        buffer_size=10000,
+        learning_starts=2000,
+        batch_size=256,
+        gamma=0.5,
         tensorboard_log="dqn_log/",
         device='cuda',
-        target_update_interval=1000,
-        verbose=0
+        target_update_interval=100,
+        train_freq=(10, "episode"),
+        verbose=1
     )
     # learning starts at 10000
     # 5e4
     gymWrapper.reset()
-    model.learn(2e4, progress_bar=True, log_interval=1)
-    model.save("dqn_log/model5")
-    model.load("dqn_log/model5")
+    model.learn(1.2e4, progress_bar=True, log_interval=1)
+    model.save("dqn_log/model7")
+    model.load("dqn_log/model7")
 
     for _ in range(100):
         done = truncted = False
@@ -59,9 +62,7 @@ if __name__ == "__main__":
         while not done:
             action, _ = model.predict(observation)
             # print(action)
-            obs, reward, done, truncted, info = gymWrapper.step(action)
-            # cv2.imshow("Resize", obs) # shows the new minimized pixel value image 
-            # cv2.waitKey(1) 
+            obs, reward, done, truncted, info = gymWrapper.step(action[0])
             if done or truncted:
                 gymWrapper.reset()
                 

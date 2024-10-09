@@ -22,7 +22,7 @@ Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 
 class MobileRobot(gym.Env):
 
-    def __init__(self) -> None:
+    def __init__(self : int) -> None:
         super(MobileRobot, self).__init__()
 
         # ROS specific params
@@ -34,20 +34,20 @@ class MobileRobot(gym.Env):
         self.scan_subscriber = None
         self.state = None
         self.log_level = 0
+        self.step_per_ep = 350
 
         # hardcoded for now
-        self.timer = rospy.Timer(rospy.Duration(30), self.timer_callback)
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
         self.info = self._get_info()
+        self.step_counter = 0
 
         # gym specific attributes
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 256, 256), dtype=np.float32)
         self.done = False
-
-        self.crashed = False
+        self.truncted = False
 
         self.min_region_values = []
 
@@ -56,12 +56,20 @@ class MobileRobot(gym.Env):
         self.done = True
 
     def step(self, action):
+        
         if self.log_level == 1:
             rospy.loginfo("Doing a step")
+
+        self.step_counter += 1
+        if (self.step_counter == self.step_per_ep):
+            self.step_counter = 0
+            self.done = True
+            return self.state, self.reward, self.done, self.truncted, self.info
+        
         self.update_velocity(action)
         self.reward = self._compute_reward()
         self.info = self._get_info()
-        return self.state, self.reward, self.done, False, self.info
+        return self.state, self.reward, self.done, self.truncted, self.info
     
     def update_velocity(self, action):
         if self.log_level == 1:
@@ -74,11 +82,11 @@ class MobileRobot(gym.Env):
         elif action == 1:
             msg.linear.x = 0.0
             msg.angular.z = 0.25
-            self.reward -= 2
+            self.reward -= 1
         elif action == 2:
             msg.linear.x = 0.0
             msg.angular.z = -0.25
-            self.reward -= 2
+            self.reward -= 1
 
         self.command_publisher.publish(msg)
 
@@ -87,31 +95,23 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-        # TODO: reward hadnling with the ROI being bellow the treshhold
-        self.reward += 0.01
+        self.reward += 2.5
 
-        if self.crashed:
+        if self.truncted:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 3
+            self.reward -= 500
 
         if self.done and not self.crashed:
-            self.reward += 2
+            self.reward += 100
 
         return self.reward
-
-    def is_done_clbk(self, data: Odometry):
-        # check based on the location
-        
-        if self.log_level == 1:
-            rospy.logdebug("Checking if done")
-        return None
 
     def reset(self, seed = None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.uniform(2, -1)
+        rand_x_position = random.uniform(-1.5, -2)
         rand_y_position = random.uniform(-1, 1)
 
         self.initial_state = ModelState()
@@ -130,7 +130,7 @@ class MobileRobot(gym.Env):
         set_model_state(self.initial_state)
         obs = self.state
         self.done = False
-        self.crashed = False
+        self.truncted = False
         self.reward = 0
 
         return obs, self.info
@@ -138,7 +138,7 @@ class MobileRobot(gym.Env):
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
         rate = rospy.Rate(100)
-        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=10, callback=self.update_state_callback)
+        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=5, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -163,17 +163,16 @@ class MobileRobot(gym.Env):
 
     def scan_front_face(self, scan_data):
 
-        front_range = scan_data.ranges[45:135]
+        front_range = scan_data.ranges[20:110]
         min_distance = min(front_range)
 
-        if min_distance < .3:
+        if min_distance < .25:
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
-            self.done = True
-            self.crashed = True
-            self.reward = self._compute_reward()
-            self.reset()
+            self.truncted = True
         elif min_distance > .31 and min_distance < .5:
-            self.reward -= 0.5
+            self.reward += 0.1
+        elif min_distance > 5.1:
+            self.reward += 0.3
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
@@ -219,13 +218,13 @@ class MobileRobot(gym.Env):
         return region_mins
     
     def _scale_values(self, value: float) -> float:
-        return ((value - 0.4)/(4 - 0.4) * 255)
+        return (value - 0.4)/(4 - 0.4)
     
     def _generate_random_orientation(self):
         """
         Generating parameters for random position and orientation
         """
-        rand_yaw = random.uniform(0, 2*np.pi)
+        rand_yaw = random.uniform(np.pi/2, -np.pi/2)
         new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
 
         return new_quaternion
