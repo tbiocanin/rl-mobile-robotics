@@ -16,13 +16,14 @@ import random
 import tf
 import tf.transformations
 from typing import Tuple, Dict, Any
+
 """
 Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 """
 
 class MobileRobot(gym.Env):
 
-    def __init__(self : int) -> None:
+    def __init__(self, verbose: int) -> None:
         super(MobileRobot, self).__init__()
 
         # ROS specific params
@@ -34,7 +35,7 @@ class MobileRobot(gym.Env):
         self.scan_subscriber = None
         self.state = None
         self.log_level = 0
-        self.step_per_ep = 350
+        self.step_per_ep = 400
 
         # hardcoded for now
         self.init_node()
@@ -42,6 +43,7 @@ class MobileRobot(gym.Env):
         self.reward = 0.0
         self.info = self._get_info()
         self.step_counter = 0
+        self.step_counter_limit = 0
 
         # gym specific attributes
         self.action_space = spaces.Discrete(3)
@@ -61,6 +63,7 @@ class MobileRobot(gym.Env):
             rospy.loginfo("Doing a step")
 
         self.step_counter += 1
+        self.step_counter_limit += 1
         if (self.step_counter == self.step_per_ep):
             self.step_counter = 0
             self.done = True
@@ -77,16 +80,16 @@ class MobileRobot(gym.Env):
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.2
+            msg.linear.x = 0.3
             msg.angular.z = 0.0
         elif action == 1:
             msg.linear.x = 0.0
-            msg.angular.z = 0.25
-            self.reward -= 1
+            msg.angular.z = 0.3
+            self.reward -= .75
         elif action == 2:
             msg.linear.x = 0.0
-            msg.angular.z = -0.25
-            self.reward -= 1
+            msg.angular.z = -0.3
+            self.reward -= .75
 
         self.command_publisher.publish(msg)
 
@@ -95,14 +98,14 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-        self.reward += 2.5
+        self.reward += .5
 
         if self.truncted:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 500
+            self.reward -= 1000
 
-        if self.done and not self.crashed:
-            self.reward += 100
+        if self.done and not self.truncted:
+            self.reward += 300
 
         return self.reward
 
@@ -131,8 +134,8 @@ class MobileRobot(gym.Env):
         obs = self.state
         self.done = False
         self.truncted = False
+        rospy.loginfo("At the end of this episode the reward was: " + str(self.reward))
         self.reward = 0
-
         return obs, self.info
 
     def create_depth_image_sub(self):
@@ -170,9 +173,7 @@ class MobileRobot(gym.Env):
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.truncted = True
         elif min_distance > .31 and min_distance < .5:
-            self.reward += 0.1
-        elif min_distance > 5.1:
-            self.reward += 0.3
+            self.reward += 0.02
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
@@ -206,7 +207,7 @@ class MobileRobot(gym.Env):
                 current_block = input_image[y:y+block_size, x:x+block_size]
                 min_val = np.min(current_block)
                 if np.isnan(min_val):
-                    min_val = 5
+                    min_val = 4.1
 
                 region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
         
@@ -218,7 +219,7 @@ class MobileRobot(gym.Env):
         return region_mins
     
     def _scale_values(self, value: float) -> float:
-        return (value - 0.4)/(4 - 0.4)
+        return (value - 0.3)/(4 - 0.3)
     
     def _generate_random_orientation(self):
         """

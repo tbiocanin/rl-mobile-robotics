@@ -18,6 +18,7 @@ class MobileRobotCNN(BaseFeaturesExtractor):
         super(MobileRobotCNN, self).__init__(observation_space, features_dim)
 
         # Neural network achitecture definition
+        # TODO : needs rework
         self.cnn = nn.Sequential(
             nn.Conv2d(in_channels=observation_space.shape[0], out_channels=32, kernel_size=8, stride=4, padding=0),
             nn.ReLU(),
