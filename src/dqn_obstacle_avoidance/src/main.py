@@ -31,26 +31,26 @@ if __name__ == "__main__":
         "CnnPolicy",
         env=gymWrapper,
         policy_kwargs = policy_kwargs_custom,
-        learning_rate=1e-5,
+        learning_rate=1e-4,
         exploration_initial_eps=1,
-        exploration_final_eps=0.85,
-        exploration_fraction=0.4,
-        buffer_size=10000,
-        learning_starts=50000,
+        exploration_final_eps=0.01,
+        exploration_fraction=0.55,
+        buffer_size=30000,
+        learning_starts=10000,
         batch_size=256,
-        gamma=0.75,
+        gamma=0.8,
         tensorboard_log="dqn_log/",
         device='cuda',
         target_update_interval=2000,
-        train_freq=(5, "episode"),
+        train_freq=(100, "episode"),
         verbose=1
     )
 
 
     gymWrapper.reset()
-    model.learn(3e5, progress_bar=True, log_interval=1)
-    model.save("dqn_log/model2")
-    model.load("dqn_log/model2")
+    model.learn(6e4, progress_bar=True, log_interval=1)
+    model.save("dqn_log/model3")
+    model.load("dqn_log/model3")
 
     for _ in range(100):
         done = truncted = False
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         while not done:
             action, _ = model.predict(observation)
             # print(action)
-            obs, reward, done, truncted, info = gymWrapper.step(action[0])
+            obs, reward, done, truncted, info = gymWrapper.step(action)
             if done or truncted:
                 gymWrapper.reset()
                 

@@ -35,7 +35,7 @@ class MobileRobot(gym.Env):
         self.scan_subscriber = None
         self.state = None
         self.log_level = 0
-        self.step_per_ep = 400
+        self.step_per_ep = 600
 
         # hardcoded for now
         self.init_node()
@@ -63,7 +63,6 @@ class MobileRobot(gym.Env):
             rospy.loginfo("Doing a step")
 
         self.step_counter += 1
-        self.step_counter_limit += 1
         if (self.step_counter == self.step_per_ep):
             self.step_counter = 0
             self.done = True
@@ -80,16 +79,16 @@ class MobileRobot(gym.Env):
         msg = Twist()
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.3
+            msg.linear.x = 0.25
             msg.angular.z = 0.0
         elif action == 1:
             msg.linear.x = 0.0
             msg.angular.z = 0.3
-            self.reward -= .75
+            self.reward -= 0.8
         elif action == 2:
             msg.linear.x = 0.0
             msg.angular.z = -0.3
-            self.reward -= .75
+            self.reward -= 0.8
 
         self.command_publisher.publish(msg)
 
@@ -98,14 +97,14 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-        self.reward += .5
+        self.reward += 1.5
 
         if self.truncted:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 1000
+            self.reward -= 150
 
         if self.done and not self.truncted:
-            self.reward += 300
+            self.reward += 50
 
         return self.reward
 
@@ -141,7 +140,7 @@ class MobileRobot(gym.Env):
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
         rate = rospy.Rate(100)
-        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=5, callback=self.update_state_callback)
+        self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=1, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
@@ -160,25 +159,34 @@ class MobileRobot(gym.Env):
 
     def create_control_pub(self):
         rospy.loginfo_once("Creating control node publisher")
-        self.command_publisher = rospy.Publisher(name="cmd_vel", data_class=Twist, queue_size=10)
+        self.command_publisher = rospy.Publisher(name="cmd_vel", data_class=Twist, queue_size=1)
 
         return self.command_publisher
 
     def scan_front_face(self, scan_data):
 
-        front_range = scan_data.ranges[20:110]
+        front_range = []
+        front_range_left = list(scan_data.ranges[315:360])
+        front_range_right = list(scan_data.ranges[0:45])
+        # print(front_range)
+
+        # a nasty workaround...
+        min_distance_left = min(front_range_left)
+        min_distance_right = min(front_range_right)
+        front_range = [min_distance_left, min_distance_right]
         min_distance = min(front_range)
 
         if min_distance < .25:
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.truncted = True
-        elif min_distance > .31 and min_distance < .5:
-            self.reward += 0.02
+            self.step_counter = 0
+        # elif min_distance > .27:
+        #     self.reward += 1
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
         rate = rospy.Rate(100)
-        scan_node_sub = rospy.Subscriber(name='/scan', data_class=LaserScan, queue_size=10, callback=self.scan_front_face)
+        scan_node_sub = rospy.Subscriber(name='/scan', data_class=LaserScan, queue_size=1, callback=self.scan_front_face)
 
         return scan_node_sub
     
