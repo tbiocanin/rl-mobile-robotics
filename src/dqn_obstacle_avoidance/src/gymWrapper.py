@@ -35,7 +35,7 @@ class MobileRobot(gym.Env):
         self.scan_subscriber = None
         self.state = None
         self.log_level = 0
-        self.step_per_ep = 600
+        self.step_per_ep = 1000
 
         # hardcoded for now
         self.init_node()
@@ -52,10 +52,7 @@ class MobileRobot(gym.Env):
         self.truncted = False
 
         self.min_region_values = []
-
-    def timer_callback(self, event):
-        rospy.loginfo("Did not crash untill the end of the episode!")
-        self.done = True
+        
 
     def step(self, action):
         
@@ -84,11 +81,11 @@ class MobileRobot(gym.Env):
         elif action == 1:
             msg.linear.x = 0.0
             msg.angular.z = 0.3
-            self.reward -= 0.8
+            self.reward -= 0.001
         elif action == 2:
             msg.linear.x = 0.0
             msg.angular.z = -0.3
-            self.reward -= 0.8
+            self.reward -= 0.001
 
         self.command_publisher.publish(msg)
 
@@ -97,14 +94,14 @@ class MobileRobot(gym.Env):
     def _compute_reward(self):
         
         # movement reward
-        self.reward += 1.5
+        self.reward += .01
 
         if self.truncted:
             rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 150
+            self.reward -= 1
 
         if self.done and not self.truncted:
-            self.reward += 50
+            self.reward += 4.5
 
         return self.reward
 
@@ -113,8 +110,14 @@ class MobileRobot(gym.Env):
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
-        rand_x_position = random.uniform(-1.5, -2)
+
+        # This is for the default map
+        rand_x_position = random.uniform(-1.4, -1.75)
         rand_y_position = random.uniform(-1, 1)
+
+        # This is for the warehouse map
+        # rand_x_position = random.uniform(-2, -3)
+        # rand_y_position = random.uniform(.5, .75)
 
         self.initial_state = ModelState()
         self.initial_state.model_name = 'turtlebot3_waffle'
@@ -145,6 +148,7 @@ class MobileRobot(gym.Env):
 
     def update_state_callback(self, msg: Image) -> None:
 
+        # stacked_images = []
         if self.log_level == 1:
             rospy.loginfo("Next state received.")
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
@@ -176,12 +180,12 @@ class MobileRobot(gym.Env):
         front_range = [min_distance_left, min_distance_right]
         min_distance = min(front_range)
 
-        if min_distance < .25:
+        if min_distance < .19:
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.truncted = True
             self.step_counter = 0
-        # elif min_distance > .27:
-        #     self.reward += 1
+        elif min_distance > .2 and min_distance < .3:
+            self.reward -= 0.001
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
@@ -217,7 +221,8 @@ class MobileRobot(gym.Env):
                 if np.isnan(min_val):
                     min_val = 4.1
 
-                region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
+                # region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
+                region_mins[y // block_size, x // block_size] = min_val
         
         # NOTE: Uncomment this block for debug purposes
         # np.savetxt('array_full.txt', region_mins, fmt='%f') # shows the pixel values positioned like on the image 
