@@ -20,12 +20,22 @@ class MobileRobotCNN(BaseFeaturesExtractor):
         # Neural network achitecture definition
         # TODO : needs rework
         self.cnn = nn.Sequential(
+            # First conv layer
             nn.Conv2d(in_channels=observation_space.shape[0], out_channels=32, kernel_size=8, stride=4, padding=0),
             nn.ReLU(),
+            # Second conv layer
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
+            # Third conv layer
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=0),
             nn.ReLU(),
+            # Fourth conv layer
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            # Fifth conv layer (optional)
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            # Flatten output before passing to fully connected layers
             nn.Flatten()
         )
 
