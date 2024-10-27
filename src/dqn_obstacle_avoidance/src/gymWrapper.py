@@ -3,15 +3,13 @@ from gymnasium import spaces
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, LaserScan
-from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge import CvBridge
 import cv2
 import rospy
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import DQN
-import multiprocessing
 import random
 import tf
 import tf.transformations
@@ -23,10 +21,10 @@ Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
 
 class MobileRobot(gym.Env):
 
-    def __init__(self, verbose: int) -> None:
+    def __init__(self, verbose : int, learning_starts : int) -> None:
         super(MobileRobot, self).__init__()
 
-        # ROS specific params
+        # ROS specific attributes
         rospy.init_node("DQN_control_node", anonymous=True)
         self.initial_state = ModelState()
         self.bridge = CvBridge()
@@ -35,23 +33,23 @@ class MobileRobot(gym.Env):
         self.scan_subscriber = None
         self.state = None
         self.log_level = 0
-        self.step_per_ep = 1000
 
-        # hardcoded for now
+        self.step_counter = 0
+        self.step_counter_limit = 250
+        self.step_learning = 250
+        self.learning_starts = learning_starts
+
         self.init_node()
         self.distance = 0.0
         self.reward = 0.0
         self.info = self._get_info()
-        self.step_counter = 0
-        self.step_counter_limit = 0
+
 
         # gym specific attributes
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(low = 0, high= 255, shape=(1, 256, 256), dtype=np.float32)
+        self.observation_space = spaces.Box(low = 0.3, high= 4.1, shape=(1, 256, 256), dtype=np.float32)
         self.done = False
         self.truncted = False
-
-        self.min_region_values = []
         
 
     def step(self, action):
@@ -59,60 +57,74 @@ class MobileRobot(gym.Env):
         if self.log_level == 1:
             rospy.loginfo("Doing a step")
 
+        # Terminating block
         self.step_counter += 1
-        if (self.step_counter == self.step_per_ep):
+        if (self.step_counter_limit == self.step_counter):
             self.step_counter = 0
             self.done = True
-            return self.state, self.reward, self.done, self.truncted, self.info
         
         self.update_velocity(action)
-        self.reward = self._compute_reward()
+        return_reward = self._compute_reward(action)
         self.info = self._get_info()
-        return self.state, self.reward, self.done, self.truncted, self.info
+
+        return self.state, return_reward, self.done, self.truncted, self.info
     
     def update_velocity(self, action):
         if self.log_level == 1:
             rospy.loginfo("Velocity update.")
         msg = Twist()
+        rate = rospy.Rate(100)
+
         # diskretizovano stanje, zavisno od akcije onda ce biti inkrement poslat
         if action == 0:
-            msg.linear.x = 0.25
-            msg.angular.z = 0.0
+            for i in range(3):
+                msg.linear.x = 0.35
+                msg.angular.z = 0.0
+                self.command_publisher.publish(msg)
+                rate.sleep()
         elif action == 1:
-            msg.linear.x = 0.0
-            msg.angular.z = 0.3
-            self.reward -= 0.001
+            for i in range(3):
+                msg.linear.x = 0.0
+                msg.angular.z = 0.3
+                self.command_publisher.publish(msg)
+                rate.sleep()
         elif action == 2:
-            msg.linear.x = 0.0
-            msg.angular.z = -0.3
-            self.reward -= 0.001
-
-        self.command_publisher.publish(msg)
-
+            for i in range(3):
+                msg.linear.x = 0.0
+                msg.angular.z = -0.3
+                self.command_publisher.publish(msg)
+                rate.sleep()
         return None
 
-    def _compute_reward(self):
-        
-        # movement reward
-        self.reward += .01
+    def _compute_reward(self, action):
 
-        if self.truncted:
-            rospy.logwarn("Crash detected, asigning negative reward")
-            self.reward -= 1
+        # action based reward
+        if action == 0:
+            self.reward += 0.3
+        if action == 1 or action == 2:
+            self.reward -= 0.05
 
-        if self.done and not self.truncted:
-            self.reward += 4.5
+        # distance based reward
+        if self.distance < .3:
+            rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
+            self.truncted = True
+            self.step_counter = 0
+            self.reward -= 40
+        elif self.distance > .31 and self.distance < .4:
+            self.reward -= 0.001
+        else:
+            self.reward += 0.09
 
         return self.reward
 
-    def reset(self, seed = None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, seed = 42, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
 
         # This is for the default map
-        rand_x_position = random.uniform(-1.4, -1.75)
+        rand_x_position = random.uniform(-1.5, -1.9)
         rand_y_position = random.uniform(-1, 1)
 
         # This is for the warehouse map
@@ -126,7 +138,7 @@ class MobileRobot(gym.Env):
         orientation = self._generate_random_orientation()
 
         self.initial_state.pose = Pose(
-            position = Point(rand_x_position, rand_y_position, 0),
+            position = Point(-1.7, 0.5, 0),
             orientation=Quaternion(orientation[0], orientation[1], orientation[2], orientation[3])
         )
 
@@ -142,13 +154,11 @@ class MobileRobot(gym.Env):
 
     def create_depth_image_sub(self):
         rospy.loginfo_once("Creating depth image subscriber!")
-        rate = rospy.Rate(100)
         self.image_subscriber = rospy.Subscriber("/camera/depth/image_raw", Image, queue_size=1, callback=self.update_state_callback)
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
 
-        # stacked_images = []
         if self.log_level == 1:
             rospy.loginfo("Next state received.")
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
@@ -172,24 +182,17 @@ class MobileRobot(gym.Env):
         front_range = []
         front_range_left = list(scan_data.ranges[315:360])
         front_range_right = list(scan_data.ranges[0:45])
-        # print(front_range)
 
         # a nasty workaround...
         min_distance_left = min(front_range_left)
         min_distance_right = min(front_range_right)
         front_range = [min_distance_left, min_distance_right]
-        min_distance = min(front_range)
+        self.distance = min(front_range)
 
-        if min_distance < .19:
-            rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
-            self.truncted = True
-            self.step_counter = 0
-        elif min_distance > .2 and min_distance < .3:
-            self.reward -= 0.001
+        return None
 
     def create_scan_node(self):
         rospy.loginfo("Creating Lidar node...")
-        rate = rospy.Rate(100)
         scan_node_sub = rospy.Subscriber(name='/scan', data_class=LaserScan, queue_size=1, callback=self.scan_front_face)
 
         return scan_node_sub
@@ -221,7 +224,6 @@ class MobileRobot(gym.Env):
                 if np.isnan(min_val):
                     min_val = 4.1
 
-                # region_mins[y // block_size, x // block_size] = self._scale_values(min_val)
                 region_mins[y // block_size, x // block_size] = min_val
         
         # NOTE: Uncomment this block for debug purposes
@@ -231,17 +233,17 @@ class MobileRobot(gym.Env):
 
         return region_mins
     
-    def _scale_values(self, value: float) -> float:
-        return (value - 0.3)/(4 - 0.3)
-    
     def _generate_random_orientation(self):
         """
         Generating parameters for random position and orientation
         """
         rand_yaw = random.uniform(np.pi/2, -np.pi/2)
-        new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
+        new_quaternion = tf.transformations.quaternion_from_euler(0, 0, 0)
 
         return new_quaternion
 
 if __name__ == "__main__":
     pass
+
+
+# NOTE: na osnovu cega i kada azurira tezinske odnose u mrezi (vise na osnovu cega)
