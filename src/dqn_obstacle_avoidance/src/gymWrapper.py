@@ -136,7 +136,7 @@ class MobileRobot(gym.Env):
         set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
         orientation = self._generate_random_orientation()
-
+        # -1.7 i 0.5
         self.initial_state.pose = Pose(
             position = Point(-1.7, 0.5, 0),
             orientation=Quaternion(orientation[0], orientation[1], orientation[2], orientation[3])
@@ -222,7 +222,7 @@ class MobileRobot(gym.Env):
                 current_block = input_image[y:y+block_size, x:x+block_size]
                 min_val = np.min(current_block)
                 if np.isnan(min_val):
-                    min_val = 4.1
+                    min_val = 3.9
 
                 region_mins[y // block_size, x // block_size] = min_val
         

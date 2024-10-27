@@ -43,16 +43,38 @@ if __name__ == "__main__":
         gamma=0.99,
         tensorboard_log="dqn_log/",
         device='cuda',
-        target_update_interval=800,
+        target_update_interval=100,
         train_freq=350,
         verbose=1,
         seed=42
     )
 
-    gymWrapper.reset()
-    model = model.learn(7e3, progress_bar=True, log_interval=1)
-    model.save("dqn_log/model3")
-    model = DQN.load("dqn_log/model3.zip", env=gymWrapper, device="cuda")
+    # first lear
+    # model = model.learn(7e3, progress_bar=True, log_interval=1)
+    # model.save("dqn_log/model1")
+    # model = DQN.load("dqn_log/model1.zip", env=gymWrapper, device="cuda")
+    
+    # second learn
+    # model.learning_rate = 1e-4
+    # model.exploration_final_eps=0.25
+    # model = model.learn(7e3, progress_bar=True, log_interval=1) 
+    # model.save("dqn_log/model2")
+    # model = DQN.load("dqn_log/model2.zip", env=gymWrapper, device="cuda")
+
+    # third learn
+    # model.learning_rate = 3e-4
+    # model.exploration_final_eps=0.4
+    # model.target_update_interval = 700
+    # model = model.learn(7e3, progress_bar=True, log_interval=1) 
+    # model.save("dqn_log/model3")
+    # model = DQN.load("dqn_log/model3.zip", env=gymWrapper, device="cuda")
+
+    # fourth learn
+    # model.exploration_final_eps=0.85
+    # model.target_update_interval = 700
+    # model = model.learn(7e3, progress_bar=True, log_interval=1) 
+    # model.save("dqn_log/model7")
+    model = DQN.load("dqn_log/model7.zip", env=gymWrapper, device="cuda")
     
     gymWrapper.step_counter_limit = float('inf')
     for _ in range(100):
