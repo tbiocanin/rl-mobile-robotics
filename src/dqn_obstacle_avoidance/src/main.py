@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from gymWrapper import MobileRobot
 from stable_baselines3 import DQN
-from sb3_contrib import QRDQN
 import multiprocessing
 import rospy
 import numpy as np
@@ -14,7 +13,7 @@ np.set_printoptions(threshold=np.inf)
 
 if __name__ == "__main__":
     try:
-        gymWrapper = MobileRobot(0, 50000)
+        gymWrapper = MobileRobot(0)
     except rospy.ROSInterruptException:
         rospy.logerr("Nodes not initialized!")
 
@@ -33,14 +32,14 @@ if __name__ == "__main__":
         "CnnPolicy",
         env=gymWrapper,
         policy_kwargs = policy_kwargs_custom,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         exploration_initial_eps=1,
-        exploration_final_eps=0.4,
-        exploration_fraction=0.55,
-        buffer_size=6000,
-        learning_starts=1000,
-        batch_size=32,
-        gamma=0.99,
+        exploration_final_eps=0.7,
+        exploration_fraction=0.5,
+        buffer_size=20000,
+        learning_starts=10000,
+        batch_size=128,
+        gamma=0.9,
         tensorboard_log="dqn_log/",
         device='cuda',
         target_update_interval=100,
@@ -48,6 +47,7 @@ if __name__ == "__main__":
         verbose=1,
         seed=42
     )
+
 
     # first lear
     # model = model.learn(7e3, progress_bar=True, log_interval=1)
