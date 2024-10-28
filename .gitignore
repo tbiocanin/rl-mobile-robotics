@@ -3,6 +3,5 @@ devel/*
 build/*
 log/*
 src/mock_pkg/*
-src/turtlebot3_simulations
 dqn_log/*
 array_full.txt
