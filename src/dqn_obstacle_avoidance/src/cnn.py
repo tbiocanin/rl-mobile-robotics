@@ -1,46 +1,44 @@
-#!/usr/bin/env python3
 import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3 import DQN
+import gym
+import numpy as np
+from gymnasium import spaces
 
-"""
-Custom CNN that will be used instead of the default one within the library
-"""
 class MobileRobotCNN(BaseFeaturesExtractor):
-
-
-    """
-    __init__(self, observation_space, features_dim)
-        observation_space -> the observation space of an agent during training and eval
-        features_dim -> dimensions of the features, default value of 256
-    """
-    def __init__(self, observation_space, features_dim=256):
+    def __init__(self, observation_space : spaces.Box, features_dim=512):
         super(MobileRobotCNN, self).__init__(observation_space, features_dim)
 
-        # Neural network achitecture definition
-        # TODO : needs rework
+        input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(in_channels=observation_space.shape[0], out_channels=32, kernel_size=8, stride=4, padding=0),
+        # First convolutional layer
+            nn.Conv2d(in_channels=input_channels, out_channels=32, kernel_size=8, stride=4),
             nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2, padding=0),
+            
+            # Second convolutional layer
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=0),
+            
+            # Second convolutional layer
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2),
+            nn.ReLU(),
+
+            # Third convolutional layer
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=2, stride=2),
             nn.ReLU(),
             nn.Flatten()
         )
-
+        # Compute the output dimension after convolutions to initialize fully connected layers
         with torch.no_grad():
             n_flatten = self.cnn(torch.as_tensor(observation_space.sample()[None]).float()).shape[1]
+        
+        # Fully connected layers
+        self.fc1 = nn.Linear(n_flatten, features_dim)
+        self.relu4 = nn.ReLU()
 
-        self.fc = nn.Sequential(
-            nn.Linear(n_flatten, features_dim),
-            nn.ReLU()
-        )
+    def forward(self, x):
+        x = self.cnn(x)
+        x = self.relu4(self.fc1(x))
 
-    """forward(self, observation)
-        forward pass through the network (cnn then a fully connected network)
-    """
-    def forward(self, observation):
-        cnn_out = self.cnn(observation)
-
-        return self.fc(cnn_out)
+        return x 

@@ -9,7 +9,6 @@ from gymWrapper import MobileRobot
 from stable_baselines3.common.env_checker import check_env
 
 if __name__ == "__main__":
-    env = MobileRobot()
-
+    env = MobileRobot(0, 0)
     #check the env
     check_env(env)
