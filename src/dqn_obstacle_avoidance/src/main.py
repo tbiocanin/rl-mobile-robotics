@@ -39,8 +39,8 @@ if __name__ == "__main__":
         exploration_initial_eps=1,
         exploration_final_eps=0.1,
         exploration_fraction=0.4,
-        buffer_size=10000,
-        learning_starts=250,
+        buffer_size=9000,
+        learning_starts=64,
         batch_size=64,
         gamma=0.99,
         tensorboard_log="dqn_log/",
@@ -49,16 +49,17 @@ if __name__ == "__main__":
         train_freq=1,
         verbose=1,
         seed=10,
-        gradient_steps=1
+        gradient_steps=1,
+        tau=0.05
     )
 
 
     customCallbackObject = SumRewardCallback()
 
-    model = model.learn(10e3, progress_bar=True, log_interval=1, callback=customCallbackObject) 
-    model.save("dqn_log/model1")
-    del model
-    model = DQN.load("dqn_log/model3", env=gymWrapper, device="cuda")
+    model = model.learn(10e3, progress_bar=True, log_interval=1) 
+    model.save("dqn_log/model3")
+    # del model
+    # model = DQN.load("dqn_log/model1", env=gymWrapper, device="cuda")
 
     gymWrapper.step_counter_limit = 1500
     for _ in range(100):

@@ -35,7 +35,7 @@ class MobileRobot(gym.Env):
         self.log_level = 0
 
         self.step_counter = 0
-        self.step_counter_limit = 350
+        self.step_counter_limit = 150
         self.start_learning_at = start_learning_at
         self.learning_counter = 0
 
@@ -47,10 +47,11 @@ class MobileRobot(gym.Env):
 
 
         # gym specific attributes
-        self.action_space = spaces.Discrete(3)
+        self.action_space = spaces.Discrete(n=3, seed=10, start=0)
         self.observation_space = spaces.Box(low = 0.3, high= 4, shape=(1, 256, 256), dtype=np.float32)
         self.done = False
         self.truncted = False
+        self.prev_action = None
         
 
     def step(self, action):
@@ -72,13 +73,14 @@ class MobileRobot(gym.Env):
         obs = self.state
         
         if obs is not None:
-
+            # expand it to be (1, 256, 256)
             obs = np.expand_dims(obs, axis=0)
         else:
-            rospy.logwarn("I SHOULD NOT BE HERE")
+            # if the sim is not ready, obs can be None so we have to handle that with dummy data
             obs = np.zeros((1, 256, 256), dtype=np.float32)
             obs = obs.clip(0.3, 4)
 
+        self.prev_action = action
         return obs, return_reward, self.done, self.truncted, self.info
     
     def update_velocity(self, action):
@@ -110,29 +112,36 @@ class MobileRobot(gym.Env):
         curret_step_reward = 0
         self.learning_counter += 1
         if self.learning_counter < self.start_learning_at:
-            if self.distance < .15:
+            if self.distance < .25:
                 rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
                 self.truncted = True
 
             return 0, self.truncted
 
         # distance based reward
-        if self.distance < .2:
+        if self.distance < .25:
             rospy.logwarn("Reseting robot position, episode is finished due to a crash.")
             self.truncted = True
             self.step_counter = 0
             curret_step_reward -= 15
             return curret_step_reward, self.truncted
-        # elif self.distance > .31 and self.distance < .4:
-            # curret_step_reward -= 0.001
+        elif self.distance > .35 and self.distance < .4:
+            curret_step_reward -= 0.001
+        
+        if self.distance < .4 and action == 0:
+            curret_step_reward -= 0.2
+        elif self.distance < .4 and (self.prev_action == 1 and action == 1):
+            curret_step_reward += 0.07
+        elif self.distance < .4 and (self.prev_action == 2 and action == 2):
+            curret_step_reward += 0.07
+        elif self.distance > .4:
+            curret_step_reward += 0.3 
 
         # action based reward
         # if action == 0:
-        #     curret_step_reward += 0.3 # 2 it/s
+        #     curret_step_reward += 0.15 # 2 it/s
         # if action == 1 or action == 2:
         #     curret_step_reward -= 0.01
-
-        curret_step_reward += 0.5
 
         if self.done and not self.truncted:
             curret_step_reward += 20
@@ -168,7 +177,7 @@ class MobileRobot(gym.Env):
         self.info = self._get_info()
         set_model_state(self.initial_state)
         
-        # tranformation based on the env_checker.py
+        # tranformation based on the env_checker.py, same logic like in step()
         obs = self.state
         if obs is not None:
             obs = np.expand_dims(obs, axis=0)
@@ -267,7 +276,7 @@ class MobileRobot(gym.Env):
         Generating parameters for random position and orientation
         """
         rand_yaw = random.uniform(0, 2*np.pi)
-        new_quaternion = tf.transformations.quaternion_from_euler(0, 0, rand_yaw)
+        new_quaternion = tf.transformations.quaternion_from_euler(0, 0, 0)
 
         return new_quaternion
 
