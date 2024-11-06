@@ -35,33 +35,33 @@ if __name__ == "__main__":
         "CnnPolicy",
         env=gymWrapper,
         policy_kwargs = policy_kwargs_custom,
-        learning_rate=5e-5,
+        learning_rate=1e-6,
         exploration_initial_eps=1,
         exploration_final_eps=0.1,
         exploration_fraction=0.4,
-        buffer_size=9000,
+        buffer_size=10000,
         learning_starts=64,
         batch_size=64,
         gamma=0.99,
         tensorboard_log="dqn_log/",
         device='cuda',
-        target_update_interval=50,
+        target_update_interval=20,
         train_freq=1,
         verbose=1,
         seed=10,
         gradient_steps=1,
-        tau=0.05
+        tau=0.01
     )
 
 
     customCallbackObject = SumRewardCallback()
 
-    model = model.learn(10e3, progress_bar=True, log_interval=1) 
-    model.save("dqn_log/model3")
-    # del model
-    # model = DQN.load("dqn_log/model1", env=gymWrapper, device="cuda")
+    # model = model.learn(10e3, progress_bar=True, log_interval=1) 
+    # model.save("dqn_log/model1")
+    del model
+    model = DQN.load("dqn_log/model1", env=gymWrapper, device="cuda") # model 2 had the best results on the new experimental reward space
 
-    gymWrapper.step_counter_limit = 1500
+    gymWrapper.step_counter_limit = 500
     for _ in range(100):
         done = truncted = False
         observation, info = gymWrapper.reset()

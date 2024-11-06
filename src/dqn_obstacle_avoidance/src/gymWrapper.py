@@ -9,11 +9,11 @@ import cv2
 import rospy
 import gymnasium as gym
 import numpy as np
-from stable_baselines3 import DQN
 import random
 import tf
 import tf.transformations
 from typing import Tuple, Dict, Any
+from multiprocessing import Lock
 
 """
 Description: Gymnasium wrapper to be used with stable-baselines3 within ROS
@@ -52,9 +52,14 @@ class MobileRobot(gym.Env):
         self.done = False
         self.truncted = False
         self.prev_action = None
+
+        # thread lock objects for the lidar and camera 
+        self.image_lock = Lock()
+        self.lidar_lock = Lock()
         
 
     def step(self, action):
+
         if self.log_level == 1:
             rospy.loginfo("Doing a step")
 
@@ -81,6 +86,7 @@ class MobileRobot(gym.Env):
             obs = obs.clip(0.3, 4)
 
         self.prev_action = action
+
         return obs, return_reward, self.done, self.truncted, self.info
     
     def update_velocity(self, action):
@@ -125,23 +131,31 @@ class MobileRobot(gym.Env):
             self.step_counter = 0
             curret_step_reward -= 15
             return curret_step_reward, self.truncted
-        elif self.distance > .35 and self.distance < .4:
-            curret_step_reward -= 0.001
+        elif self.distance > .35 and self.distance < .5:
+            curret_step_reward -= 0.0075
         
-        if self.distance < .4 and action == 0:
-            curret_step_reward -= 0.2
-        elif self.distance < .4 and (self.prev_action == 1 and action == 1):
-            curret_step_reward += 0.07
-        elif self.distance < .4 and (self.prev_action == 2 and action == 2):
-            curret_step_reward += 0.07
-        elif self.distance > .4:
-            curret_step_reward += 0.3 
+        if self.distance < .5 and action == 0:
+            curret_step_reward -= 0.8
+        
+        if self.distance < .5 and (self.prev_action == 1 and action == 1):
+            curret_step_reward += 0.25
+        
+        if self.distance < .5 and (self.prev_action == 2 and action == 2):
+            curret_step_reward += 0.25
+        
+        if self.distance > .51 and action == 0:
+            curret_step_reward += 0.45
 
         # action based reward
-        # if action == 0:
-        #     curret_step_reward += 0.15 # 2 it/s
-        # if action == 1 or action == 2:
-        #     curret_step_reward -= 0.01
+        if action == 0:
+            curret_step_reward += 0.06 # 2 it/s
+        elif action == 1:
+            curret_step_reward -= 0.05
+        elif action == 2:
+            curret_step_reward -= 0.05
+
+        if (action == 1 or action == 2) and self.distance > .51:
+            curret_step_reward -= 0.01
 
         if self.done and not self.truncted:
             curret_step_reward += 20
@@ -149,13 +163,14 @@ class MobileRobot(gym.Env):
         return curret_step_reward, self.truncted
 
     def reset(self, seed = 10, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
+
         super().reset(seed=seed)
         rospy.loginfo("Reseting robot position for the next episode...")
 
         # generating random positions for next episodes
 
         # This is for the default map
-        rand_x_position = random.uniform(-1.65, -2)
+        rand_x_position = random.uniform(-1.75, -2)
         rand_y_position = random.uniform(-1, 1)
 
         # This is for the warehouse map, TODO: don't do this here
@@ -189,6 +204,7 @@ class MobileRobot(gym.Env):
         self.truncted = False
         rospy.loginfo("At the end of this episode the reward was: " + str(self.reward))
         self.reward = 0
+
         return obs, self.info
 
     def create_depth_image_sub(self):
@@ -197,6 +213,8 @@ class MobileRobot(gym.Env):
         return self.image_subscriber
 
     def update_state_callback(self, msg: Image) -> None:
+        
+        self.image_lock.acquire()
 
         if self.log_level == 1:
             rospy.loginfo("Next state received.")
@@ -206,6 +224,8 @@ class MobileRobot(gym.Env):
 
         resized_image = cv2.resize(cv_image, (256, 256))
         self.state = self._get_region_minimum(resized_image, 1)
+
+        self.image_lock.release()
 
         return None
 
@@ -217,6 +237,8 @@ class MobileRobot(gym.Env):
 
     def scan_front_face(self, scan_data):
 
+        self.lidar_lock.acquire()
+
         front_range = []
         front_range_left = list(scan_data.ranges[330:360])
         front_range_right = list(scan_data.ranges[0:30])
@@ -226,6 +248,8 @@ class MobileRobot(gym.Env):
         min_distance_right = min(front_range_right)
         front_range = [min_distance_left, min_distance_right]
         self.distance = min(front_range)
+
+        self.lidar_lock.release()
 
         return None
 
