@@ -6,9 +6,6 @@ import rospy
 import numpy as np
 from cnn import MobileRobotCNN
 
-from stable_baselines3.common.evaluation import evaluate_policy
-from customTensorboard import SumRewardCallback
-
 # DEBUG: print option for numpy
 np.set_printoptions(threshold=np.inf)
 
@@ -52,9 +49,6 @@ if __name__ == "__main__":
         gradient_steps=1,
         tau=0.01
     )
-
-
-    customCallbackObject = SumRewardCallback()
 
     # model = model.learn(10e3, progress_bar=True, log_interval=1) 
     # model.save("dqn_log/model1")

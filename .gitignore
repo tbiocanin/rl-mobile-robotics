@@ -5,3 +5,5 @@ log/*
 src/mock_pkg/*
 dqn_log/*
 array_full.txt
+PPO_log/
+QRdqn_log/
