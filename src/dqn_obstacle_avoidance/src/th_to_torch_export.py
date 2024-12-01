@@ -7,7 +7,6 @@ from gymWrapper import MobileRobot
 from stable_baselines3 import DQN
 import torch as th
 import rospy as rp
-import numpy as np 
 
 rp.loginfo("Loading the model")
 gymWrapper = MobileRobot(verbose=0, start_learning_at=250)
@@ -16,7 +15,6 @@ model = DQN.load("dqn_log/model1.zip", env=gymWrapper, device="cuda")
 onnxable_model = model.policy
 onnxable_model.to("cuda")
 
-observation_size = model.observation_space
 obs = th.zeros((1, 1, 256, 256), dtype=th.float32, device="cuda")
 
 onnx_path = "model1.onnx"

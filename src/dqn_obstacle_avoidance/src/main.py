@@ -61,7 +61,6 @@ if __name__ == "__main__":
         observation, info = gymWrapper.reset()
         while not done:
             action, _ = model.predict(observation)
-            # print(action)
             observation, reward, done, truncted, info = gymWrapper.step(action)
             observation = np.expand_dims(observation, axis=0)
             if done or truncted:
