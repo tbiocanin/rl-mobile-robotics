@@ -2,6 +2,8 @@
 devel/*
 build/*
 log/*
+dqn-jetson-inference/src/__pycache__
+dqn_obstacle_avoidance/src/__pycache__
 src/mock_pkg/*
 dqn_log/*
 array_full.txt
