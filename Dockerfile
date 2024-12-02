@@ -14,6 +14,8 @@ RUN bash -c "source /opt/ros/noetic/setup.bash && cd rl-mobile-robotics/ && catk
 # setting the repo as the default work dir
 WORKDIR /rl-mobile-robotics
 
+RUN git fetch origin && git pull
+
 # copying the right models to the project folder
 COPY dqn_log /rl-mobile-robotics/
 
