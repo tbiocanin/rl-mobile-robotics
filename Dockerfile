@@ -16,8 +16,6 @@ WORKDIR /rl-mobile-robotics
 
 RUN git fetch origin && git pull
 
-# copying the right models to the project folder
-COPY dqn_log /rl-mobile-robotics/
-
-
+# installing the necessary python3 libs
+RUN bash -c "pip3 install cv_bridge"
 RUN bash -c "pip3 install Jetson.GPIO"

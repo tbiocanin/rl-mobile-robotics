@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
+
 """
-Main script for running the inference models on jetson nano
+Node for handling the image processing using depthNet inference.
+This node gatheres images from the camera, does the process through the depthNet
+and publishes the output on the depth_image topic.
 """
 
 import sys
 import argparse
-import time
 
+# ROS specific imports
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+
+# Jetson specific imports
 from jetson_inference import depthNet
 from jetson_utils import videoSource, videoOutput, cudaOverlay, cudaDeviceSynchronize, Log, cudaToNumpy
 from depthnet_utils import depthBuffers
+
+# cv bridge object needed for image transformations
+bridge = CvBridge()
 
 # parse the command line
 parser = argparse.ArgumentParser(description="Mono depth estimation on a video/image stream using depthNet DNN.", 
@@ -26,7 +37,34 @@ parser.add_argument("--colormap", type=str, default="viridis-inverted", help="co
                                   choices=["inferno", "inferno-inverted", "magma", "magma-inverted", "parula", "parula-inverted", 
                                            "plasma", "plasma-inverted", "turbo", "turbo-inverted", "viridis", "viridis-inverted"])
 
-if __name__ == "__main__":
+def create_depth_image_publisher():
+    """
+    Creating the depth image publisher node so that the output can be send
+    """
+
+    try:
+        rospy.loginfo_once("Creating depth image publisher...")
+        depth_image_publisher = rospy.Publisher(name="depth_node", data_class=Image, queue_size=1)
+        return depth_image_publisher
+    except:
+        rospy.logerr("Could not create the depth image publisher! Exiting...")
+        sys.exit()
+
+def publish_depth_image(depth_field, publisher):
+    """
+    Transform and prepare the message to be in a desired format to be send to the topic.
+    """
+
+    depth_numpy = cudaToNumpy(depth_field)
+    ros_img = bridge.cv2_to_imgmsg(depth_numpy, encoding="passthrough")
+
+    publisher.publish(ros_img)
+
+
+def main():
+    """
+    The main sequence of this node.
+    """
 
     try:
         args = parser.parse_known_args()[0]
@@ -39,16 +77,12 @@ if __name__ == "__main__":
     net = depthNet(args.network, sys.argv)
     buffers = depthBuffers(args)
 
-    input = videoSource(args.input, argv = sys.argv)
+    input = videoSource(args.input, argv=sys.argv)
     output = videoOutput(args.output, argv=sys.argv)
 
     # need to do this only once
     depth_field = net.GetDepthField()
-    depth_numpy = cudaToNumpy(depth_field)
-
-    # 224x224
-    print("Depth field resolution is: ", depth_field.width, depth_field.height)
-    # this should be transformed into a publisher
+    depth_image_publisher = create_depth_image_publisher()
 
     while True:
         img_input = input.Capture()
@@ -57,12 +91,15 @@ if __name__ == "__main__":
             continue
 
         buffers.Alloc(img_input.shape, img_input.format)
-
         net.Process(img_input, buffers.depth)
-
         cudaDeviceSynchronize()
-        net.PrintProfilerTimes()
+        # net.PrintProfilerTimes()
+
+        # publish the processed image
+        publish_depth_image(output, depth_image_publisher)
 
         if not input.IsStreaming() or not output.IsStreaming():
             break
 
+if __name__ == "__main__":
+    main()

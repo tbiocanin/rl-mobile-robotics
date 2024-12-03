@@ -1,0 +1,6 @@
+<launch>
+<!-- Nodes to be activated within the package on jetson nano -->
+  <node pkg="dqn-jetson-inference" type="depth_node.py" name="depth_node" output="screen"/>
+  <node pkg="dqn-jetson-inference" type="main.py" name="main" output="screen"/>
+
+</launch>
