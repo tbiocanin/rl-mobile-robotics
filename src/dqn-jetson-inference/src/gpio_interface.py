@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 Interface with the GPIO for movement commands
 """
@@ -40,6 +39,7 @@ def setup(duty_cycle_value : int):
     gpio.setup(40, gpio.OUT)
 
     pwm_left.start(duty_cycle_percent=duty_cycle_value)
+    pwm_right.start(duty_cycle_percent=duty_cycle_value)
 
     return [pwm_left, pwm_right]
 
@@ -81,12 +81,29 @@ def stop():
     gpio.output(40, gpio.LOW)
 
 def handle_user_prompt(user_in : str) -> None:
+    """
+    Test function to validate that the movement is correct    
+    """
 
     if user_in == "0":
         move_forward()
     elif user_in == "1":
         move_left()
     elif user_in == "2":
+        move_right()
+    else:
+        print("Invalid input!")
+
+def handle_dqn_input(network_in : int) -> None:
+    """
+    Fun called by the ROS packet for movement of the robot   
+    """
+
+    if network_in == 0:
+        move_forward()
+    elif network_in == 1:
+        move_left()
+    elif network_in == 2:
         move_right()
     else:
         print("Invalid input!")
@@ -100,7 +117,6 @@ def main():
             user_in = input("Enter the next command: ")
             handle_user_prompt(user_in=user_in)
     except KeyboardInterrupt:
-
         # stop all pins and reset state
         stop()
         p_left.stop()
