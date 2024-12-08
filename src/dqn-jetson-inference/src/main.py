@@ -24,7 +24,7 @@ class MainRobotProcess():
         self.depth_image_subscriber = None
         [self.p_left, self.p_right] = gpio_interface.setup(25)
 
-        # GPIO setup
+        rospy.init_node("Main_robot_process")
 
     def init_node(self):
         """

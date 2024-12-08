@@ -9,8 +9,8 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 import numpy as np
 
-TRT_LOGGER = trt.Logger(trt.Logger.Warning)
-ENGINE_PATH = "onnx/model.engine"
+TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+ENGINE_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/onnx/model1.trt"
 
 class DQN_Inference():
     """
@@ -21,13 +21,12 @@ class DQN_Inference():
         self.context = self.engine.create_execution_context()
 
         self.input_shape = (1, 1, 256, 256)
-        self.output_shape = (1, 1)
-
+        self.output_shape = 3
         self.input_data = np.zeros(self.input_shape).astype(np.float32)
         self.output_data = np.empty(self.output_shape, dtype=np.int8)
 
-        self.d_input = cuda.mem_alloc(self.input_data.bytes)
-        self.d_output = cuda.mem_alloc(self.output_data.bytes)
+        self.d_input = cuda.mem_alloc(self.input_data.nbytes)
+        self.d_output = cuda.mem_alloc(self.output_data.nbytes)
         self.bindings = [int(self.d_input), int(self.d_output)]
         self.stream = cuda.Stream()
 
