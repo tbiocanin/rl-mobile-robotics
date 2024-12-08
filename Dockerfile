@@ -17,4 +17,3 @@ RUN git fetch origin && git pull
 # installing the necessary python3 libs
 RUN bash -c "pip3 install cv_bridge"
 RUN bash -c "pip3 install Jetson.GPIO"
-RUN bash -c "pip3 install opencv-python"
