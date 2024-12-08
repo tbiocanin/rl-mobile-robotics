@@ -83,11 +83,12 @@ def main():
     net = depthNet(ros_param_network, sys.argv)
     buffers = depthBuffers(args)
 
-    input = videoSource(args.input, argv=sys.argv)
+    input = videoSource("csi://0", argv=sys.argv)
     output = videoOutput(args.output, argv=sys.argv)
 
     # need to do this only once
     depth_field = net.GetDepthField()
+    rospy.init_node("DepthNet_publisher")
     depth_image_publisher = create_depth_image_publisher()
 
     while True:
@@ -99,7 +100,7 @@ def main():
         buffers.Alloc(img_input.shape, img_input.format)
         net.Process(img_input, buffers.depth)
         cudaDeviceSynchronize()
-        # net.PrintProfilerTimes()
+        net.PrintProfilerTimes()
 
         # publish the processed image
         publish_depth_image(output, depth_image_publisher)
