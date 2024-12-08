@@ -17,3 +17,6 @@ RUN git fetch origin && git pull
 # installing the necessary python3 libs
 RUN bash -c "pip3 install cv_bridge"
 RUN bash -c "pip3 install Jetson.GPIO"
+
+# fix regarding the missing folders in the jetson-inference repo within the base image
+COPY src/dqn-jetson-inference/src/models.json /jetson-inference/data/networks/

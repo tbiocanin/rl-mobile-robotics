@@ -19,23 +19,7 @@ from jetson_inference import depthNet
 from jetson_utils import videoSource, videoOutput, cudaOverlay, cudaDeviceSynchronize, Log, cudaToNumpy
 from depthnet_utils import depthBuffers
 
-# cv bridge object needed for image transformations
 bridge = CvBridge()
-
-# parse the command line
-parser = argparse.ArgumentParser(description="Mono depth estimation on a video/image stream using depthNet DNN.", 
-                                 formatter_class=argparse.RawTextHelpFormatter, 
-                                 epilog=depthNet.Usage() + videoSource.Usage() + videoOutput.Usage() + Log.Usage())
-
-parser.add_argument("input", type=str, default="", nargs='?', help="URI of the input stream")
-parser.add_argument("output", type=str, default="", nargs='?', help="URI of the output stream")
-parser.add_argument("--network", type=str, default="fcn-mobilenet", help="pre-trained model to load, see below for options")
-parser.add_argument("--visualize", type=str, default="input,depth", help="visualization options (can be 'input' 'depth' 'input,depth'")
-parser.add_argument("--depth-size", type=float, default=1.0, help="scales the size of the depth map visualization, as a percentage of the input size (default is 1.0)")
-parser.add_argument("--filter-mode", type=str, default="linear", choices=["point", "linear"], help="filtering mode used during visualization, options are:\n  'point' or 'linear' (default: 'linear')")
-parser.add_argument("--colormap", type=str, default="viridis-inverted", help="colormap to use for visualization (default is 'viridis-inverted')",
-                                  choices=["inferno", "inferno-inverted", "magma", "magma-inverted", "parula", "parula-inverted", 
-                                           "plasma", "plasma-inverted", "turbo", "turbo-inverted", "viridis", "viridis-inverted"])
 
 def create_depth_image_publisher():
     """
@@ -66,6 +50,27 @@ def main():
     The main sequence of this node.
     """
 
+    # cv bridge object needed for image transformations
+    MODEL_PATH = "/jetson-inference/data/networks/MonoDepth-FCN-Mobilenet/monodepth_fcn_mobilenet.onnx"
+    DEFAULT_INPUT = "csi://0"
+
+    ros_param_network = rospy.get_param("network", MODEL_PATH)
+    ros_param_input = rospy.get_param("input", DEFAULT_INPUT)
+    # parse the command line
+    parser = argparse.ArgumentParser(description="Mono depth estimation on a video/image stream using depthNet DNN.", 
+                                    formatter_class=argparse.RawTextHelpFormatter, 
+                                    epilog=depthNet.Usage() + videoSource.Usage() + videoOutput.Usage() + Log.Usage())
+
+    parser.add_argument("input", type=str, default=ros_param_input, nargs='?', help="URI of the input stream")
+    parser.add_argument("output", type=str, default="", nargs='?', help="URI of the output stream")
+    parser.add_argument("--network", type=str, default=ros_param_network, help="pre-trained model to load, see below for options")
+    parser.add_argument("--visualize", type=str, default="input,depth", help="visualization options (can be 'input' 'depth' 'input,depth'")
+    parser.add_argument("--depth-size", type=float, default=1.0, help="scales the size of the depth map visualization, as a percentage of the input size (default is 1.0)")
+    parser.add_argument("--filter-mode", type=str, default="linear", choices=["point", "linear"], help="filtering mode used during visualization, options are:\n  'point' or 'linear' (default: 'linear')")
+    parser.add_argument("--colormap", type=str, default="viridis-inverted", help="colormap to use for visualization (default is 'viridis-inverted')",
+                                    choices=["inferno", "inferno-inverted", "magma", "magma-inverted", "parula", "parula-inverted", 
+                                            "plasma", "plasma-inverted", "turbo", "turbo-inverted", "viridis", "viridis-inverted"])
+
     try:
         args = parser.parse_known_args()[0]
     except:
@@ -74,7 +79,8 @@ def main():
         sys.exit(0)
 
     # needs an explicit --network argument passed (the path to the net within the docker image)
-    net = depthNet(args.network, sys.argv)
+    print("NETWORK PARAM: ", args.network)
+    net = depthNet(ros_param_network, sys.argv)
     buffers = depthBuffers(args)
 
     input = videoSource(args.input, argv=sys.argv)

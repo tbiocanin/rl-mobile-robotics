@@ -1,0 +1,12 @@
+{
+ "monodepth": {
+        "fcn-mobilenet": {
+            "alias": ["fcn_mobilenet", "monodepth-mobilenet", "monodepth_mobilenet", "monodepth_fcn_mobilenet", "monodepth-fcn-mobilenet", "mobilenet"],
+            "url": "https://nvidia.box.com/shared/static/frgbiqeieaja0o8b0eyb87fjbsqd4zup.gz",
+            "tar": "MonoDepth-FCN-Mobilenet.tar.gz",
+            "dir": "MonoDepth-FCN-Mobilenet",
+            "model": "monodepth_fcn_mobilenet.onnx",
+            "description": "FCN-Mobilenet monocular depth estimation model"
+        }   
+    }
+}

@@ -1,6 +1,11 @@
 <launch>
 <!-- Nodes to be activated within the package on jetson nano -->
-  <node pkg="dqn-jetson-inference" type="depth_node.py" name="depth_node" output="screen"/>
+  <arg name="network" default="/jetson-inference/data/networks/MonoDepth-FCN-Mobilenet/monodepth_fcn_mobilenet.onnx"/>
+  <arg name="input" default="csi://0"/>
+  <node pkg="dqn-jetson-inference" type="depth_node.py" name="depth_node" output="screen">
+    <param name="network" type="string" value="/jetson-inference/data/networks/MonoDepth-FCN-Mobilenet/monodepth_fcn_mobilenet.onnx"/>
+    <param name="input" type="string" value="csi://0" />
+  </node>
   <node pkg="dqn-jetson-inference" type="main.py" name="main" output="screen"/>
 
 </launch>
