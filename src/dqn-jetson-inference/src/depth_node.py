@@ -103,7 +103,7 @@ def main():
         net.PrintProfilerTimes()
 
         # publish the processed image
-        publish_depth_image(output, depth_image_publisher)
+        publish_depth_image(depth_field, depth_image_publisher)
 
         if not input.IsStreaming() or not output.IsStreaming():
             break

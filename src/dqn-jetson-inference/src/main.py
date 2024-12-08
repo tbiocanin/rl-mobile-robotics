@@ -31,7 +31,7 @@ class MainRobotProcess():
         Init and run the main process with this function call
         """
         self.depth_image_subscriber = self.create_depth_image_subscriber()
-        rospy.spin()
+#        rospy.spin()
 
     def create_depth_image_subscriber(self):
         """
@@ -50,7 +50,7 @@ class MainRobotProcess():
         """
         Callback function for the depth_subscriber node. It gets executed if a new image is on the topic.
         """
-
+        print("Callback called...")
         # get the input from depthNet
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
         resize_image = cv2.resize(cv_image, (256, 256))
