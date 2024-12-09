@@ -7,25 +7,23 @@ and publishes the output on the depth_image topic.
 """
 
 import sys
-import argparse
+import torch as th
+import cv2
+import numpy as np
 
 # ROS specific imports
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
-# Jetson specific imports
-from jetson_inference import depthNet
-from jetson_utils import videoSource, videoOutput, cudaOverlay, cudaDeviceSynchronize, Log, cudaToNumpy
-from depthnet_utils import depthBuffers
-
 bridge = CvBridge()
+MODEL_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/models/depth_anything_v2_metric_vkitti_vits.pth"
+
 
 def create_depth_image_publisher():
     """
     Creating the depth image publisher node so that the output can be send
     """
-
     try:
         rospy.loginfo_once("Creating depth image publisher...")
         depth_image_publisher = rospy.Publisher(name="depth_node", data_class=Image, queue_size=1)
@@ -38,74 +36,64 @@ def publish_depth_image(depth_field, publisher):
     """
     Transform and prepare the message to be in a desired format to be send to the topic.
     """
-
-    depth_numpy = cudaToNumpy(depth_field)
-    ros_img = bridge.cv2_to_imgmsg(depth_numpy, encoding="passthrough")
-
+    ros_img = bridge.cv2_to_imgmsg(depth_field, encoding="passthrough")
     publisher.publish(ros_img)
 
+def gstreamer_pipeline(sensor_id=0, capture_width=1280, capture_height=720,
+                       display_width=224, display_height=224, framerate=30, flip_method=0):
+    return (
+        f"nvarguscamerasrc sensor-id={sensor_id} ! "
+        f"video/x-raw(memory:NVMM), width=(int){capture_width}, height=(int){capture_height}, format=(string)NV12, framerate=(fraction){framerate}/1 ! "
+        f"nvvidconv flip-method={flip_method} ! "
+        f"video/x-raw, width=(int){display_width}, height=(int){display_height}, format=(string)BGRx ! "
+        f"videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+    )
 
 def main():
     """
     The main sequence of this node.
     """
+    
+    model = th.load(MODEL_PATH, map_location="cuda")
+    model.eval()
 
-    # cv bridge object needed for image transformations
-    MODEL_PATH = "/jetson-inference/data/networks/MonoDepth-FCN-Mobilenet/monodepth_fcn_mobilenet.onnx"
-    DEFAULT_INPUT = "csi://0"
+    cap = cv2.VideoCapture(gstreamer_pipeline(), cv2.CAP_GSTREAMER)
 
-    ros_param_network = rospy.get_param("network", MODEL_PATH)
-    ros_param_input = rospy.get_param("input", DEFAULT_INPUT)
-    # parse the command line
-    parser = argparse.ArgumentParser(description="Mono depth estimation on a video/image stream using depthNet DNN.", 
-                                    formatter_class=argparse.RawTextHelpFormatter, 
-                                    epilog=depthNet.Usage() + videoSource.Usage() + videoOutput.Usage() + Log.Usage())
-
-    parser.add_argument("input", type=str, default=ros_param_input, nargs='?', help="URI of the input stream")
-    parser.add_argument("output", type=str, default="", nargs='?', help="URI of the output stream")
-    parser.add_argument("--network", type=str, default=ros_param_network, help="pre-trained model to load, see below for options")
-    parser.add_argument("--visualize", type=str, default="input,depth", help="visualization options (can be 'input' 'depth' 'input,depth'")
-    parser.add_argument("--depth-size", type=float, default=1.0, help="scales the size of the depth map visualization, as a percentage of the input size (default is 1.0)")
-    parser.add_argument("--filter-mode", type=str, default="linear", choices=["point", "linear"], help="filtering mode used during visualization, options are:\n  'point' or 'linear' (default: 'linear')")
-    parser.add_argument("--colormap", type=str, default="viridis-inverted", help="colormap to use for visualization (default is 'viridis-inverted')",
-                                    choices=["inferno", "inferno-inverted", "magma", "magma-inverted", "parula", "parula-inverted", 
-                                            "plasma", "plasma-inverted", "turbo", "turbo-inverted", "viridis", "viridis-inverted"])
+    if not cap.isOpened():
+        print("Unable to load the camera")
+        sys.exit()
 
     try:
-        args = parser.parse_known_args()[0]
-    except:
-        print("")
-        parser.print_help()
-        sys.exit(0)
+        while True:
+            # Capture a frame
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Unable to read from camera")
+                break
 
-    # needs an explicit --network argument passed (the path to the net within the docker image)
-    print("NETWORK PARAM: ", args.network)
-    net = depthNet(ros_param_network, sys.argv)
-    buffers = depthBuffers(args)
+            # Preprocess the frame
+            resized_frame = cv2.resize(frame, (224, 224))  # Resize to match model input
+            input_tensor = th.from_numpy(resized_frame).permute(2, 0, 1).unsqueeze(0).float() / 255.0  # Normalize
+            input_tensor = input_tensor.to("cuda")  # Send to GPU if available
 
-    input = videoSource(args.input, argv=sys.argv)
-    output = videoOutput(args.output, argv=sys.argv)
+            # Run the model
+            with th.no_grad():
+                output = model(input_tensor)
 
-    # need to do this only once
-    depth_field = net.GetDepthField()
-    depth_image_publisher = create_depth_image_publisher()
+            # Example: Display the model's output
+            print(f"Model output: {output.cpu().numpy()}")
 
-    while True:
-        img_input = input.Capture()
+            # Show the live camera feed
+            cv2.imshow("Camera Feed", frame)
 
-        if img_input is None:
-            continue
-
-        buffers.Alloc(img_input.shape, img_input.format)
-        net.Process(img_input, buffers.depth)
-        cudaDeviceSynchronize()
-        # net.PrintProfilerTimes()
-
-        # publish the processed image
-        publish_depth_image(output, depth_image_publisher)
-
-        if not input.IsStreaming() or not output.IsStreaming():
-            break
+            # Press 'q' to exit the loop
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+    
 
 if __name__ == "__main__":
     main()
+    # rospy.spin()
