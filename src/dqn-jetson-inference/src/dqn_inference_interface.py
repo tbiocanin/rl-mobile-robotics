@@ -10,7 +10,7 @@ import pycuda.autoinit
 import numpy as np
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-ENGINE_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/onnx/model1.trt"
+ENGINE_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/models/model1.trt"
 
 class DQN_Inference():
     """

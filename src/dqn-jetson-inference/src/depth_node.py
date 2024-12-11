@@ -17,7 +17,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 bridge = CvBridge()
-MODEL_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/models/depth_anything_v2_metric_vkitti_vits.pth"
+MODEL_PATH = "/rl-mobile-robotics/src/dqn-jetson-inference/src/models/model_best.pth.tar"
 
 
 def create_depth_image_publisher():
